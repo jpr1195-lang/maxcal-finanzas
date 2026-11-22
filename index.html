@@ -7,8 +7,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MAXCAL" />
-  <link id="faviconLink" rel="icon" href="https://supabase.com/dashboard/project/hufxirxqtoegkerslvuv/storage/files/buckets/Logo?preview=logo-maxcala.gif" />
-  <link id="appleTouchIcon" rel="apple-touch-icon" href="https://supabase.com/dashboard/project/hufxirxqtoegkerslvuv/storage/files/buckets/Logo?preview=logo-maxcala.gif" />
+  <link id="faviconLink" rel="icon" href="https://hufxirxqtoegkerslvuv.supabase.co/storage/v1/object/public/assets/logo-maxcala.gif" />
+  <link id="appleTouchIcon" rel="apple-touch-icon" href="https://hufxirxqtoegkerslvuv.supabase.co/storage/v1/object/public/assets/logo-maxcala.gif" />
   <title>MAXCAL — Finanzas del Hogar</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -60,6 +60,12 @@
       overflow-x: hidden;
     }
 
+    @keyframes maxcalSyncPulse {
+      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.55); }
+      50% { transform: scale(1.08); box-shadow: 0 0 0 8px rgba(37, 99, 235, 0); }
+      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+    }
+
     header {
       background: var(--surface);
       border-bottom: 1px solid var(--border);
@@ -77,10 +83,13 @@
       width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
       background: var(--surface-2); border: 1px solid var(--border);
       overflow: hidden; display: grid; place-items: center;
+      transition: border-color 0.2s;
     }
-    .brand-logo img {
-      width: 100%; height: 100%; object-fit: cover; display: block;
+    .brand-logo.syncing {
+      animation: maxcalSyncPulse 0.85s ease-in-out;
+      border-color: var(--primary);
     }
+    .brand-logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .brand-info { min-width: 0; }
     .brand h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.02em; }
     .session-pill {
@@ -138,6 +147,25 @@
     .kpi-label { font-size: 0.78rem; color: var(--text-muted); font-weight: 500; }
     .kpi-value { font-size: 1.55rem; font-weight: 700; margin: 0.25rem 0; letter-spacing: -0.02em; }
     .kpi-sub { font-size: 0.75rem; color: var(--text-muted); }
+
+    .chart-box {
+      position: relative;
+      width: 100%;
+      height: 260px;
+    }
+    .month-inspector {
+      margin-top: 0.75rem;
+      padding: 0.7rem 0.85rem;
+      border-radius: 10px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.65rem;
+      flex-wrap: wrap;
+      font-size: 0.8rem;
+    }
 
     .badge {
       display: inline-flex; align-items: center; gap: 0.35rem;
@@ -245,6 +273,7 @@
       .kpi-value { font-size: 1.22rem; }
       .kpi-label { font-size: 0.72rem; }
       .kpi-sub { font-size: 0.68rem; }
+      .chart-box { height: 210px; }
 
       .main-grid { grid-template-columns: 1fr; gap: 1rem; }
       .item-row { flex-wrap: wrap; }
@@ -285,7 +314,7 @@
 <header>
   <div class="brand">
     <div class="brand-logo">
-      <img id="headerLogoImg" src="https://supabase.com/dashboard/project/hufxirxqtoegkerslvuv/storage/files/buckets/Logo?preview=logo-maxcala.gif" alt="MAXCAL Logo" />
+      <img id="headerLogoImg" src="https://hufxirxqtoegkerslvuv.supabase.co/storage/v1/object/public/assets/logo-maxcala.gif" alt="MAXCAL Logo" />
     </div>
     <div class="brand-info">
       <h1>MAXCAL <span style="font-weight:400;color:var(--text-muted)">| Finanzas</span></h1>
@@ -340,9 +369,15 @@
       <div class="card">
         <div class="section-header">
           <div class="section-title">Proyección 12 Meses</div>
-          <span class="kpi-sub">Tarjetas + Fijos</span>
+          <button class="btn-sm" onclick="openMonthDetailModal()">📊 Detalle mes a mes</button>
         </div>
-        <canvas id="projectionChart" height="140"></canvas>
+        <div class="chart-box">
+          <canvas id="projectionChart"></canvas>
+        </div>
+        <div class="month-inspector" id="monthInspector">
+          <span class="kpi-sub">Tocá una barra o usá el botón para ver el detalle mensual.</span>
+          <button class="btn-sm primary" onclick="openMonthDetailModal()">Ver tabla 12 meses</button>
+        </div>
       </div>
 
       <div class="card" id="moduleLoans">
@@ -411,9 +446,9 @@
     <span class="nav-ico">🧮</span>
     <span>Simular</span>
   </button>
-  <button onclick="document.getElementById('aiSection').scrollIntoView({behavior:'smooth'})">
-    <span class="nav-ico">✨</span>
-    <span>Asistente</span>
+  <button onclick="openMonthDetailModal()">
+    <span class="nav-ico">📊</span>
+    <span>Meses</span>
   </button>
   <button onclick="openModal('modalModules')">
     <span class="nav-ico">⚙️</span>
@@ -421,6 +456,18 @@
   </button>
 </nav>
 
+<!-- MODAL: Detalle Mes a Mes de la Gráfica -->
+<div class="modal-backdrop" id="modalMonthDetail">
+  <div class="modal">
+    <div class="section-header">
+      <div class="section-title">Detalle Proyectado (12 Meses)</div>
+      <button onclick="closeModal('modalMonthDetail')">✕</button>
+    </div>
+    <div id="monthDetailBody"></div>
+  </div>
+</div>
+
+<!-- MODAL: Login / Registro Separado -->
 <div class="modal-backdrop" id="modalLogin">
   <div class="modal">
     <div class="section-header">
@@ -452,6 +499,7 @@
   </div>
 </div>
 
+<!-- MODAL: Nuevo / Editar Movimiento -->
 <div class="modal-backdrop" id="modalTx">
   <div class="modal">
     <div class="section-header">
@@ -515,6 +563,7 @@
   </div>
 </div>
 
+<!-- MODAL: Nuevo / Editar Compromiso o Préstamo -->
 <div class="modal-backdrop" id="modalCommitment">
   <div class="modal">
     <div class="section-header">
@@ -559,6 +608,7 @@
   </div>
 </div>
 
+<!-- MODAL: Nueva / Editar Tarjeta -->
 <div class="modal-backdrop" id="modalCard">
   <div class="modal">
     <div class="section-header">
@@ -584,6 +634,7 @@
   </div>
 </div>
 
+<!-- MODAL: Simulador -->
 <div class="modal-backdrop" id="modalSim">
   <div class="modal">
     <div class="section-header">
@@ -611,6 +662,7 @@
   </div>
 </div>
 
+<!-- MODAL: Módulos -->
 <div class="modal-backdrop" id="modalModules">
   <div class="modal">
     <div class="section-header">
@@ -637,7 +689,7 @@
   const MAXCAL_CONFIG = {
     supabaseUrl: "https://hufxirxqtoegkerslvuv.supabase.co",
     supabaseAnonKey: "sb_publishable_0FO_ns7iD0YEJ-zndT-qVA_nr9AlC_q",
-    logoUrl: "https://supabase.com/dashboard/project/hufxirxqtoegkerslvuv/storage/files/buckets/Logo?preview=logo-maxcala.gif"
+    logoUrl: "https://hufxirxqtoegkerslvuv.supabase.co/storage/v1/object/public/assets/logo-maxcala.gif"
   };
 
   function applyLogoAsset() {
@@ -650,6 +702,15 @@
     if (apple) apple.href = MAXCAL_CONFIG.logoUrl;
   }
 
+  function triggerLogoSyncAnimation() {
+    const logo = document.querySelector('.brand-logo');
+    if (!logo) return;
+    logo.classList.remove('syncing');
+    void logo.offsetWidth;
+    logo.classList.add('syncing');
+    setTimeout(() => logo.classList.remove('syncing'), 900);
+  }
+
   const supabaseClient = window.supabase.createClient(
     MAXCAL_CONFIG.supabaseUrl,
     MAXCAL_CONFIG.supabaseAnonKey
@@ -659,6 +720,7 @@
   let authMode = 'login';
   let servicesViewMode = 'grouped';
   let chartInstance = null;
+  let monthlySeriesCache = [];
 
   let state = {
     income: 0,
@@ -676,6 +738,10 @@
     applyLogoAsset();
     document.getElementById('txDate').valueAsDate = new Date();
     document.getElementById('comStartDate').valueAsDate = new Date();
+
+    window.addEventListener('resize', () => {
+      if (chartInstance) renderChart();
+    });
 
     const { data: { session } } = await supabaseClient.auth.getSession();
     if (session?.user) {
@@ -833,6 +899,7 @@
         .reduce((acc, t) => acc + getTxEffectiveArs(t), 0);
     }
 
+    triggerLogoSyncAnimation();
     renderAll();
   }
 
@@ -965,6 +1032,7 @@
 
     if (persist && currentUser) {
       await supabaseClient.from('user_profiles').update({ services_view_mode: mode }).eq('id', currentUser.id);
+      triggerLogoSyncAnimation();
     }
   }
 
@@ -1063,13 +1131,17 @@
     const labels = [];
     const cardsData = [];
     const fixedData = [];
+    monthlySeriesCache = [];
 
     const now = new Date();
     const baseFixed = state.commitments.reduce((acc, c) => acc + Number(c.amount), 0);
+    const isMobile = window.innerWidth <= 820;
 
     for (let m = 0; m < 12; m++) {
       const d = new Date(now.getFullYear(), now.getMonth() + m, 1);
-      labels.push(d.toLocaleDateString('es-AR', { month: 'short' }));
+      const shortLabel = d.toLocaleDateString('es-AR', { month: 'short' });
+      const fullLabel = d.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+      labels.push(shortLabel);
 
       const monthCards = state.transactions
         .filter(t => t.type === 'expense' && t.payment_method === 'credit_card')
@@ -1083,8 +1155,24 @@
           return acc;
         }, 0);
 
-      cardsData.push(Math.round(monthCards));
-      fixedData.push(Math.round(baseFixed));
+      const cVal = Math.round(monthCards);
+      const fVal = Math.round(baseFixed);
+      const totalOut = cVal + fVal;
+      const freeVal = Math.round(state.income - totalOut);
+
+      cardsData.push(cVal);
+      fixedData.push(fVal);
+      monthlySeriesCache.push({
+        month: fullLabel,
+        fixed: fVal,
+        cards: cVal,
+        totalOut,
+        free: freeVal
+      });
+    }
+
+    if (monthlySeriesCache.length > 0) {
+      updateMonthInspector(0);
     }
 
     if (chartInstance) chartInstance.destroy();
@@ -1099,10 +1187,72 @@
       },
       options: {
         responsive: true,
-        scales: { x: { stacked: true }, y: { stacked: true } },
-        plugins: { legend: { position: 'bottom' } }
+        maintainAspectRatio: false,
+        onClick: (_, elements) => {
+          if (elements && elements.length > 0) {
+            updateMonthInspector(elements[0].index);
+          }
+        },
+        scales: {
+          x: {
+            stacked: true,
+            ticks: {
+              maxRotation: 0,
+              autoSkip: true,
+              maxTicksLimit: isMobile ? 6 : 12,
+              font: { size: isMobile ? 10 : 12 }
+            }
+          },
+          y: {
+            stacked: true,
+            ticks: {
+              maxTicksLimit: isMobile ? 5 : 7,
+              font: { size: isMobile ? 10 : 12 }
+            }
+          }
+        },
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: { boxWidth: 12, font: { size: isMobile ? 11 : 12 } }
+          }
+        }
       }
     });
+  }
+
+  function updateMonthInspector(index) {
+    const row = monthlySeriesCache[index];
+    const el = document.getElementById('monthInspector');
+    if (!row || !el) return;
+    el.innerHTML = `
+      <div>
+        <strong style="text-transform:capitalize">${row.month}</strong>:
+        Fijos ${fmtArs(row.fixed)} + Tarjetas ${fmtArs(row.cards)} = <strong>${fmtArs(row.totalOut)}</strong>
+      </div>
+      <button class="btn-sm primary" onclick="openMonthDetailModal()">Ver tabla 12 meses</button>
+    `;
+  }
+
+  function openMonthDetailModal() {
+    const body = document.getElementById('monthDetailBody');
+    if (!monthlySeriesCache.length) {
+      body.innerHTML = `<div class="kpi-sub">Sin datos proyectados aún.</div>`;
+    } else {
+      body.innerHTML = monthlySeriesCache.map(r => `
+        <div class="item-row">
+          <div>
+            <div class="item-title" style="text-transform:capitalize">${r.month}</div>
+            <div class="item-meta">Fijos: ${fmtArs(r.fixed)} • Tarjetas: ${fmtArs(r.cards)}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-weight:600;">${fmtArs(r.totalOut)}</div>
+            <div class="item-meta" style="color:${r.free >= 0 ? 'var(--green)' : 'var(--red)'}">Libre: ${fmtArs(r.free)}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+    openModal('modalMonthDetail');
   }
 
   function runPurchaseSimulation() {
@@ -1209,6 +1359,7 @@
       await loadFromSupabase();
     } else {
       state.transactions = state.transactions.filter(t => t.id !== id);
+      triggerLogoSyncAnimation();
       renderAll();
     }
   }
@@ -1248,6 +1399,7 @@
       await loadFromSupabase();
     } else {
       state.commitments = state.commitments.filter(c => c.id !== id);
+      triggerLogoSyncAnimation();
       renderAll();
     }
   }
@@ -1279,6 +1431,7 @@
       await loadFromSupabase();
     } else {
       state.cards = state.cards.filter(c => c.id !== id);
+      triggerLogoSyncAnimation();
       renderAll();
     }
   }
@@ -1319,6 +1472,7 @@
         state.transactions.unshift({ id: 'tx_' + Date.now(), ...payload });
       }
       state.income = state.transactions.filter(t => t.type === 'income').reduce((a, b) => a + getTxEffectiveArs(b), 0);
+      triggerLogoSyncAnimation();
       renderAll();
     }
     closeModal('modalTx');
@@ -1352,6 +1506,7 @@
       } else {
         state.commitments.push({ id: 'com_' + Date.now(), ...payload, current_installment: 1, remaining_installments: (total_installments || 1) - 1 });
       }
+      triggerLogoSyncAnimation();
       renderAll();
     }
     closeModal('modalCommitment');
@@ -1381,6 +1536,7 @@
       } else {
         state.cards.push({ id: 'card_' + Date.now(), ...payload });
       }
+      triggerLogoSyncAnimation();
       renderAll();
     }
     closeModal('modalCard');
@@ -1414,6 +1570,7 @@
 
     if (currentUser) {
       await supabaseClient.from('user_profiles').update({ card_monthly_limit_pct: state.limitPct }).eq('id', currentUser.id);
+      triggerLogoSyncAnimation();
     }
     renderAll();
     closeModal('modalModules');
