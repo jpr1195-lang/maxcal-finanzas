@@ -415,10 +415,10 @@
           </div>
         </div>
         <div class="prompts">
+          <button class="prompt-btn" onclick="askPreset('¿En qué meses se me liberan cuotas este año?')">¿Cuándo se liberan cuotas?</button>
+          <button class="prompt-btn" onclick="askPreset('¿Puedo comprar algo de 1200000 en 6 cuotas?')">Proyectar compra grande</button>
           <button class="prompt-btn" onclick="askPreset('¿Qué ingresos tengo cargados?')">Mis ingresos</button>
-          <button class="prompt-btn" onclick="askPreset('¿Cuántas cuotas me quedan y cuánto se libera?')">Cuotas</button>
           <button class="prompt-btn" onclick="askPreset('¿Cuánto llevo en dólares en tarjetas?')">USD</button>
-          <button class="prompt-btn" onclick="askPreset('¿Cómo estoy de margen libre este mes?')">Margen libre</button>
         </div>
         <div class="chat-form">
           <input type="text" id="aiInput" placeholder="Escribí una pregunta..." onkeydown="if(event.key==='Enter') sendAiQuery()" />
@@ -510,8 +510,14 @@
       </div>
     </div>
     <div class="field hidden" id="fxRateGroup">
-      <label>Cotización de referencia ($ ARS por 1 USD)</label>
-      <input type="number" step="0.01" id="txFxRate" value="1450" />
+      <label style="display:flex; justify-content:space-between; align-items:center;">
+        <span>Cotización del día ($ ARS por 1 USD)</span>
+        <span id="fxRateStatus" style="font-size:0.72rem; color:var(--accent); font-weight:600;"></span>
+      </label>
+      <div style="display:flex; gap:0.45rem; align-items:center;">
+        <input type="number" step="0.01" id="txFxRate" value="1450" />
+        <button type="button" class="sm" onclick="fetchTodayUsdRate('tarjeta')" title="Actualizar cotización del día">🔄 Hoy</button>
+      </div>
     </div>
     <div class="grid-2" id="txPaymentRow">
       <div class="field">
@@ -546,6 +552,8 @@
       <label>Tipo</label>
       <select id="comType" onchange="toggleLoanFields()">
         <option value="service">Servicio (Luz, Gas, Internet, Agua)</option>
+        <option value="mobility">Movilidad / Nafta / Combustible (Tope Mensual)</option>
+        <option value="variable_budget">Presupuesto Mensual (Supermercado / Varios)</option>
         <option value="loan_installment">Préstamo / Cuota Vehículo / Crédito MP</option>
         <option value="insurance">Seguro (Auto, Hogar, Vida)</option>
         <option value="rent">Alquiler / Vivienda</option>
@@ -628,14 +636,24 @@
         <input type="number" id="simInstallments" value="6" min="1" max="24" />
       </div>
     </div>
-    <div class="field">
-      <label>Tarjeta</label>
-      <select id="simCardId"></select>
+    <div class="grid-2">
+      <div class="field">
+        <label>Tarjeta</label>
+        <select id="simCardId"></select>
+      </div>
+      <div class="field">
+        <label>Momento de compra</label>
+        <select id="simTimingMode">
+          <option value="auto">Hoy (según cierre actual)</option>
+          <option value="after_closing">Esperar al cierre (próx. ciclo)</option>
+        </select>
+      </div>
     </div>
-    <button class="primary" style="width:100%; margin-bottom:0.85rem;" onclick="runPurchaseSimulation()">Evaluar</button>
+    <button class="primary" style="width:100%; margin-bottom:0.85rem;" onclick="runPurchaseSimulation()">Proyectar Impacto 12 Meses</button>
     <div id="simResult" class="bubble bot" style="max-width:100%">
-      Ingresá un monto y cuotas para evaluar el impacto mensual y el cierre.
+      Ingresá un monto y cuotas para simular cómo queda tu margen libre mes a mes en los próximos 12 meses.
     </div>
+    <div id="simMonthlyPreview" style="margin-top:0.75rem;"></div>
   </div>
 </div>
 
@@ -798,6 +816,7 @@
         }
       }
       setSessionUI(false, "");
+      await fetchTodayUsdRate('tarjeta');
       renderAll();
     } catch (err) {
       console.error(err);
@@ -820,6 +839,7 @@
     } catch (_) {}
 
     setSessionUI(true, displayName);
+    await fetchTodayUsdRate('tarjeta');
     await loadFromSupabase();
   }
 
@@ -1089,9 +1109,10 @@
     }
 
     document.getElementById('kpiCards').textContent = fmtArs(totalCardsArs);
+    const liveUsdHint = window.latestUsdTarjetaRate ? ` · Dólar hoy: $ ${window.latestUsdTarjetaRate.toLocaleString('es-AR')}` : '';
     document.getElementById('kpiCardsUsd').textContent = nextMonthCardsArs > 0 && totalCardsArs === 0
-      ? `Próx. mes: ${fmtArs(nextMonthCardsArs)} · USD: ${fmtUsd(totalUsd)}`
-      : `USD: ${fmtUsd(totalUsd)}`;
+      ? `Próx. mes: ${fmtArs(nextMonthCardsArs)} · USD: ${fmtUsd(totalUsd)}${liveUsdHint}`
+      : `USD: ${fmtUsd(totalUsd)}${liveUsdHint}`;
     document.getElementById('kpiFree').textContent = fmtArs(freeCash);
     document.getElementById('kpiFree').style.color = freeCash >= 0 ? 'var(--ok)' : 'var(--bad)';
 
@@ -1155,7 +1176,11 @@
     if (servicesViewMode === 'grouped') {
       const groups = {};
       items.forEach(i => {
-        const k = i.commitment_type === 'service' ? 'Servicios' : i.commitment_type === 'insurance' ? 'Seguros' : 'Vivienda';
+        const k = i.commitment_type === 'service' ? 'Servicios'
+                  : i.commitment_type === 'mobility' ? 'Movilidad y Nafta'
+                  : i.commitment_type === 'variable_budget' ? 'Presupuesto Cotidiano'
+                  : i.commitment_type === 'insurance' ? 'Seguros'
+                  : 'Vivienda';
         if (!groups[k]) groups[k] = { total: 0, count: 0 };
         groups[k].total += Number(i.amount);
         groups[k].count += 1;
@@ -1226,17 +1251,29 @@
     }).join('');
   }
 
+  function getCommitmentsForMonthOffset(monthOffset) {
+    return state.commitments.reduce((acc, c) => {
+      if (c.commitment_type === 'loan_installment' && c.total_installments) {
+        const curr = Number(c.current_installment) || 1;
+        const tot = Number(c.total_installments) || 1;
+        const rem = c.remaining_installments != null ? Number(c.remaining_installments) : Math.max(0, tot - curr);
+        if (monthOffset > rem) return acc; // Loan finished before this future month!
+      }
+      return acc + Number(c.amount || 0);
+    }, 0);
+  }
+
   function computeMonthlySeries() {
     monthlySeriesCache = [];
     const now = new Date();
-    const baseFixed = state.commitments.reduce((acc, c) => acc + Number(c.amount), 0);
 
     for (let m = 0; m < 12; m++) {
       const d = new Date(now.getFullYear(), now.getMonth() + m, 1);
       const monthCards = getCardMonthlyTotalsForDate(d);
+      const monthFixed = getCommitmentsForMonthOffset(m);
 
       const cVal = Math.round(monthCards);
-      const fVal = Math.round(baseFixed);
+      const fVal = Math.round(monthFixed);
       const totalOut = cVal + fVal;
       monthlySeriesCache.push({
         short: d.toLocaleDateString('es-AR', { month: 'short' }),
@@ -1307,29 +1344,68 @@
   }
 
   function runPurchaseSimulation() {
-    const amount = Number(document.getElementById('simAmount').value);
-    const quotas = Number(document.getElementById('simInstallments').value) || 1;
+    computeMonthlySeries();
+    const amount = Number(document.getElementById('simAmount').value) || 0;
+    const quotas = Math.max(1, Number(document.getElementById('simInstallments').value) || 1);
+    const timingMode = document.getElementById('simTimingMode')?.value || 'auto';
     const card = state.cards.find(c => c.id === document.getElementById('simCardId').value) || state.cards[0];
-    const monthlyQuota = amount / quotas;
+    const monthlyQuota = Math.round(amount / quotas);
 
-    const curCards = state.transactions
-      .filter(t => t.type === 'expense' && t.payment_method === 'credit_card')
-      .reduce((acc, t) => acc + (getTxEffectiveArs(t) / (Number(t.installments_total) || 1)), 0);
-
-    const newRatio = state.income > 0 ? ((curCards + monthlyQuota) / state.income) * 100 : 100;
-    let timing = 'Cargá una tarjeta para ver su cierre.';
+    let startOffset = 0;
+    let timing = 'Cargá una tarjeta para evaluar su regla de cierre.';
     if (card) {
       const cyc = getCardCycleDates(card);
-      timing = new Date().getTime() > cyc.closingDate.getTime()
-        ? `Ya pasó el cierre de ${card.name} (${cyc.summary}): entra en el próximo ciclo.`
-        : `${card.name}: ${cyc.summary}. Si esperás al cierre, ganás días.`;
+      const isAfterClosing = new Date().getTime() > cyc.closingDate.getTime();
+      if (timingMode === 'after_closing' || isAfterClosing) {
+        startOffset = 1;
+        timing = isAfterClosing
+          ? `Como ya pasó el cierre de ${card.name} (${cyc.summary}), la cuota 1 entra recién el próximo mes.`
+          : `Esperando al cierre de ${card.name} (${cyc.summary}), pateás la cuota 1 al próximo ciclo.`;
+      } else {
+        timing = `${card.name}: ${cyc.summary}. Si comprás hoy entra este mes; si esperás al cierre, arranca el mes que viene.`;
+      }
+    } else if (timingMode === 'after_closing') {
+      startOffset = 1;
     }
 
-    const verdict = newRatio <= state.limitPct
-      ? `✅ <strong>VIABLE:</strong> ${fmtArs(monthlyQuota)}/mes en ${quotas} cuotas (${newRatio.toFixed(1)}% de ingresos).`
-      : `⚠️ <strong>ALTO:</strong> Lleva las tarjetas al ${newRatio.toFixed(1)}% de ingresos (tope ${state.limitPct}%).`;
+    const simulatedMonths = monthlySeriesCache.map((row, idx) => {
+      const extra = (idx >= startOffset && idx < startOffset + quotas) ? monthlyQuota : 0;
+      const newCards = row.cards + extra;
+      const newFree = row.free - extra;
+      const ratio = state.income > 0 ? (newCards / state.income) * 100 : 100;
+      return { ...row, extra, newCards, newFree, ratio };
+    });
+
+    const worstMonth = simulatedMonths.reduce((min, cur) => cur.newFree < min.newFree ? cur : min, simulatedMonths[0]);
+    const peakRatio = Math.max(...simulatedMonths.map(m => m.ratio));
+    const negativeMonths = simulatedMonths.filter(m => m.newFree < 0);
+
+    let verdict = '';
+    if (negativeMonths.length > 0) {
+      verdict = `🚨 <strong>NO RECOMENDADO HOY:</strong> Te deja en rojo en ${negativeMonths.length} mes(es) (peor mes: <span style="text-transform:capitalize">${worstMonth.month}</span> con <strong>${fmtArs(worstMonth.newFree)}</strong>).`;
+    } else if (peakRatio > state.limitPct) {
+      verdict = `⚠️ <strong>AJUSTADO PERO POSIBLE:</strong> Cubrís todos los meses (mínimo libre: <strong>${fmtArs(worstMonth.newFree)}</strong> en <span style="text-transform:capitalize">${worstMonth.month}</span>), pero las tarjetas suben al ${peakRatio.toFixed(0)}% de tus ingresos (tope ${state.limitPct}%).`;
+    } else {
+      verdict = `✅ <strong>VIABLE:</strong> Sumás ${fmtArs(monthlyQuota)}/mes en ${quotas} cuotas (${peakRatio.toFixed(0)}% de ingresos). Tu margen libre más bajo será <strong>${fmtArs(worstMonth.newFree)}</strong>.`;
+    }
 
     document.getElementById('simResult').innerHTML = `${verdict}<br><br>${timing}`;
+
+    const previewEl = document.getElementById('simMonthlyPreview');
+    if (previewEl) {
+      previewEl.innerHTML = `<div class="eyebrow" style="margin-bottom:0.4rem;">Impacto proyectado mes a mes</div>` +
+        simulatedMonths.slice(0, Math.min(12, startOffset + quotas + 1)).map(m => `
+          <div class="row-item" style="padding:0.48rem 0;">
+            <div class="row-main">
+              <div class="row-name" style="text-transform:capitalize">${m.month} ${m.extra > 0 ? '<span class="pill warn">+Cuota</span>' : ''}</div>
+              <div class="row-sub">Tarjetas: ${fmtArs(m.newCards)} (${m.ratio.toFixed(0)}%)</div>
+            </div>
+            <div style="text-align:right; font-weight:700; color:${m.newFree >= 0 ? 'var(--ok)' : 'var(--bad)'}">
+              ${fmtArs(m.newFree)}
+            </div>
+          </div>
+        `).join('');
+    }
   }
 
   function askPreset(txt) {
@@ -1339,17 +1415,49 @@
 
   function buildDynamicAiReply(raw) {
     aiTurn += 1;
+    computeMonthlySeries();
     const q = raw.toLowerCase();
     const incomes = state.transactions.filter(t => t.type === 'income');
     const totalIncome = incomes.reduce((a, t) => a + getTxEffectiveArs(t), 0) || state.income;
     const loans = state.commitments.filter(c => c.commitment_type === 'loan_installment');
     const fixed = state.commitments.filter(c => c.commitment_type !== 'loan_installment').reduce((a, c) => a + Number(c.amount), 0);
     const loanTotal = loans.reduce((a, c) => a + Number(c.amount), 0);
-    const cardTx = state.transactions.filter(t => t.type === 'expense' && t.payment_method === 'credit_card');
     const cardMonth = getCardMonthlyTotalsForDate(new Date());
     const usdTx = state.transactions.filter(t => t.type === 'expense' && t.currency === 'USD');
     const totalUsd = usdTx.reduce((a, t) => a + Number(t.amount), 0);
     const free = totalIncome - (fixed + loanTotal + cardMonth);
+
+    // Detect big-purchase simulation question with numbers (e.g., "comprar algo de 1500000 en 6 cuotas")
+    const cleanNum = raw.replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.');
+    const amtMatch = cleanNum.match(/(\d{4,}(?:\.\d+)?)/);
+    const qMatch = raw.match(/(\d+)\s*cuota/i);
+    if (amtMatch && (q.includes('comprar') || q.includes('estirar') || q.includes('cuota') || q.includes('gastar') || q.includes('puedo'))) {
+      const simAmt = Number(amtMatch[1]);
+      const simQuotas = qMatch ? Math.max(1, Number(qMatch[1])) : 1;
+      const perMonth = Math.round(simAmt / simQuotas);
+      const worst = monthlySeriesCache.slice(0, simQuotas).reduce((min, r) => (r.free - perMonth) < (min.free - perMonth) ? r : min, monthlySeriesCache[0]);
+      const minFreeAfter = worst ? worst.free - perMonth : free - perMonth;
+
+      if (minFreeAfter < 0) {
+        const betterQuotas = Math.min(24, Math.ceil(simAmt / Math.max(1, Math.min(...monthlySeriesCache.slice(0, 12).map(r => r.free)))));
+        return `⚠️ Si sumás <strong>${fmtArs(simAmt)}</strong> en ${simQuotas} cuota(s) de <strong>${fmtArs(perMonth)}/mes</strong>, quedarías en rojo en <span style="text-transform:capitalize">${worst.month}</span> (<strong>${fmtArs(minFreeAfter)}</strong>).<br>💡 Para que no te deje en negativo, necesitarías al menos <strong>${betterQuotas} cuotas</strong> o esperar a que se liberen compromisos.`;
+      }
+      return `✅ <strong>Te podés estirar:</strong> ${fmtArs(simAmt)} en ${simQuotas} cuota(s) suma <strong>${fmtArs(perMonth)}/mes</strong>. Tu mes más ajustado será <span style="text-transform:capitalize">${worst.month}</span>, donde igual te quedarían <strong>${fmtArs(minFreeAfter)}</strong> libres.`;
+    }
+
+    if (q.includes('libera') || q.includes('termina') || q.includes('año') || q.includes('anual') || q.includes('próximo')) {
+      const drops = [];
+      for (let i = 1; i < monthlySeriesCache.length; i++) {
+        const diff = monthlySeriesCache[i - 1].totalOut - monthlySeriesCache[i].totalOut;
+        if (diff > 0) {
+          drops.push(`• En <strong style="text-transform:capitalize">${monthlySeriesCache[i].month}</strong> bajás <strong>${fmtArs(diff)}/mes</strong> (te quedan ${fmtArs(monthlySeriesCache[i].free)} libres).`);
+        }
+      }
+      if (!drops.length) {
+        return `En los próximos 12 meses tus compromisos proyectados se mantienen estables en <strong>${fmtArs(monthlySeriesCache[0]?.totalOut || 0)}/mes</strong>, dejándote <strong>${fmtArs(free)}</strong> libres por mes.`;
+      }
+      return `Meses donde se te libera margen:<br>${drops.slice(0, 4).join('<br>')}`;
+    }
 
     if (q.includes('ingreso') || q.includes('sueldo') || q.includes('cobré') || q.includes('cobre')) {
       if (!incomes.length) return `No tenés ingresos cargados todavía. Tocá <strong>+ Ingreso</strong> para registrarlos.`;
@@ -1371,9 +1479,9 @@
     }
 
     const pool = [
-      `Margen libre estimado: <strong>${fmtArs(free)}</strong> (Ingresos ${fmtArs(totalIncome)} − Compromisos ${fmtArs(fixed + loanTotal + cardMonth)}).`,
-      `Tenés ${incomes.length} ingreso(s) por <strong>${fmtArs(totalIncome)}</strong>, cuotas de tarjeta por <strong>${fmtArs(cardMonth)}</strong> y USD <strong>${fmtUsd(totalUsd)}</strong>.`,
-      `Consultame por tus <em>ingresos</em>, <em>cuotas</em>, <em>USD</em> o <em>margen libre</em>.`
+      `Margen libre estimado este mes: <strong>${fmtArs(free)}</strong> (Ingresos ${fmtArs(totalIncome)} − Compromisos ${fmtArs(fixed + loanTotal + cardMonth)}).`,
+      `Tenés ${incomes.length} ingreso(s) por <strong>${fmtArs(totalIncome)}</strong>, tarjetas este mes por <strong>${fmtArs(cardMonth)}</strong> y USD <strong>${fmtUsd(totalUsd)}</strong>.`,
+      `Probá preguntarme: <em>"¿Puedo comprar algo de 1500000 en 6 cuotas?"</em> o <em>"¿En qué meses se me liberan cuotas?"</em>.`
     ];
     return pool[(aiTurn - 1) % pool.length];
   }
@@ -1632,8 +1740,43 @@
     html.setAttribute('data-theme', next);
     document.getElementById('themeBtn').textContent = next === 'light' ? '🌙' : '☀️';
   }
+  async function fetchTodayUsdRate(preferredType = 'tarjeta') {
+    const fxInput = document.getElementById('txFxRate');
+    const statusEl = document.getElementById('fxRateStatus');
+    if (!fxInput) return;
+
+    if (statusEl) statusEl.textContent = 'Consultando...';
+
+    const endpoints = [
+      { url: `https://dolarapi.com/v1/dolares/${preferredType}`, label: 'Dólar Tarjeta' },
+      { url: 'https://dolarapi.com/v1/dolares/oficial', label: 'Dólar Oficial' }
+    ];
+
+    for (const ep of endpoints) {
+      try {
+        const res = await fetch(ep.url);
+        if (!res.ok) continue;
+        const data = await res.json();
+        const rate = Number(data?.venta || data?.compra);
+        if (rate > 0) {
+          fxInput.value = rate;
+          window.latestUsdTarjetaRate = rate;
+          if (statusEl) statusEl.textContent = `${ep.label}: $ ${rate.toLocaleString('es-AR')}`;
+          return rate;
+        }
+      } catch (_) {}
+    }
+
+    if (statusEl) statusEl.textContent = 'Sin conexión (valor manual)';
+    return Number(fxInput.value) || 1450;
+  }
+
   function toggleFxField() {
-    document.getElementById('fxRateGroup').classList.toggle('hidden', document.getElementById('txCurrency').value !== 'USD');
+    const isUsd = document.getElementById('txCurrency').value === 'USD';
+    document.getElementById('fxRateGroup').classList.toggle('hidden', !isUsd);
+    if (isUsd) {
+      fetchTodayUsdRate('tarjeta');
+    }
   }
   function toggleCardFields() {
     const isInc = document.getElementById('txType').value === 'income';
