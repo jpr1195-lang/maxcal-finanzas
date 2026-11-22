@@ -726,10 +726,9 @@
     setTimeout(() => logo.classList.remove('syncing'), 900);
   }
 
-  const supabaseClient = window.supabase.createClient(
-    MAXCAL_CONFIG.supabaseUrl,
-    MAXCAL_CONFIG.supabaseAnonKey
-  );
+  const supabaseClient = (window.supabase && typeof window.supabase.createClient === 'function')
+    ? window.supabase.createClient(MAXCAL_CONFIG.supabaseUrl, MAXCAL_CONFIG.supabaseAnonKey)
+    : null;
 
   let currentUser = null;
   let authMode = 'login';
@@ -750,19 +749,26 @@
   const fmtUsd = (n) => 'US$ ' + (Number(n) || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   async function initApp() {
-    applyLogoAsset();
-    document.getElementById('txDate').valueAsDate = new Date();
-    document.getElementById('comStartDate').valueAsDate = new Date();
+    try {
+      applyLogoAsset();
+      document.getElementById('txDate').valueAsDate = new Date();
+      document.getElementById('comStartDate').valueAsDate = new Date();
 
-    window.addEventListener('resize', () => {
-      if (chartInstance) renderChart();
-    });
+      window.addEventListener('resize', () => {
+        if (chartInstance) renderChart();
+      });
 
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (session?.user) {
-      await applyAuthenticatedSession(session.user);
-    } else {
+      if (supabaseClient) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session?.user) {
+          await applyAuthenticatedSession(session.user);
+          return;
+        }
+      }
       setSessionUI(false, "");
+      renderAll();
+    } catch (err) {
+      console.error('Error al iniciar MAXCAL:', err);
       renderAll();
     }
   }
@@ -819,6 +825,10 @@
   }
 
   async function submitAuthForm() {
+    if (!supabaseClient) {
+      alert('No se pudo cargar la librería de Supabase. Revisá tu conexión a internet y recargá.');
+      return;
+    }
     if (authMode === 'signup') {
       await signUpWithEmail();
     } else {
@@ -829,7 +839,10 @@
   async function loginWithEmail() {
     const email = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
-    if (!email || !password) return;
+    if (!email || !password) {
+      alert('Ingresá tu correo y contraseña.');
+      return;
+    }
 
     const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) {
@@ -844,7 +857,10 @@
     const fullName = document.getElementById('loginName').value.trim();
     const email = document.getElementById('loginEmail').value.trim();
     const password = document.getElementById('loginPassword').value;
-    if (!email || !password) return;
+    if (!email || !password) {
+      alert('Ingresá tu correo y contraseña.');
+      return;
+    }
 
     const redirectTo = window.location.protocol.startsWith('http')
       ? `${window.location.origin}${window.location.pathname}`
@@ -882,7 +898,7 @@
   }
 
   async function logoutUser() {
-    await supabaseClient.auth.signOut();
+    if (supabaseClient) await supabaseClient.auth.signOut();
     currentUser = null;
     state = { income: 0, limitPct: 30, cards: [], commitments: [], transactions: [], installments: [] };
     setSessionUI(false, "");
@@ -890,7 +906,7 @@
   }
 
   async function loadFromSupabase() {
-    if (!currentUser) return;
+    if (!currentUser || !supabaseClient) return;
     const [cardsRes, comRes, loansRes, txRes, instRes, projRes] = await Promise.all([
       supabaseClient.from('credit_cards').select('*').eq('is_active', true).order('created_at'),
       supabaseClient.from('commitments').select('*').eq('is_active', true).order('created_at'),
@@ -1045,7 +1061,7 @@
     document.getElementById('btnItemized').classList.toggle('active', mode === 'itemized');
     renderServices();
 
-    if (persist && currentUser) {
+    if (persist && currentUser && supabaseClient) {
       await supabaseClient.from('user_profiles').update({ services_view_mode: mode }).eq('id', currentUser.id);
       triggerLogoSyncAnimation();
     }
@@ -1142,7 +1158,10 @@
   }
 
   function renderChart() {
-    const ctx = document.getElementById('projectionChart').getContext('2d');
+    if (typeof Chart === 'undefined') return;
+    const canvas = document.getElementById('projectionChart');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
     const labels = [];
     const cardsData = [];
     const fixedData = [];
@@ -1369,7 +1388,7 @@
 
   async function deleteTransaction(id) {
     if (!confirm('¿Eliminar este movimiento?')) return;
-    if (currentUser) {
+    if (currentUser && supabaseClient) {
       await supabaseClient.from('transactions').delete().eq('id', id);
       await loadFromSupabase();
     } else {
@@ -1409,7 +1428,7 @@
 
   async function deleteCommitment(id) {
     if (!confirm('¿Eliminar este compromiso/préstamo?')) return;
-    if (currentUser) {
+    if (currentUser && supabaseClient) {
       await supabaseClient.from('commitments').delete().eq('id', id);
       await loadFromSupabase();
     } else {
@@ -1441,7 +1460,7 @@
 
   async function deleteCard(id) {
     if (!confirm('¿Eliminar esta tarjeta?')) return;
-    if (currentUser) {
+    if (currentUser && supabaseClient) {
       await supabaseClient.from('credit_cards').delete().eq('id', id);
       await loadFromSupabase();
     } else {
@@ -1471,7 +1490,7 @@
       installments_total, transaction_date
     };
 
-    if (currentUser) {
+    if (currentUser && supabaseClient) {
       if (editId) {
         const { error } = await supabaseClient.from('transactions').update(payload).eq('id', editId);
         if (error) return alert('Error al actualizar: ' + error.message);
@@ -1506,7 +1525,7 @@
 
     const payload = { commitment_type, title, amount, due_day, total_installments, start_date };
 
-    if (currentUser) {
+    if (currentUser && supabaseClient) {
       if (editId) {
         const { error } = await supabaseClient.from('commitments').update(payload).eq('id', editId);
         if (error) return alert('Error al actualizar: ' + error.message);
@@ -1536,7 +1555,7 @@
 
     const payload = { name, closing_day, due_day };
 
-    if (currentUser) {
+    if (currentUser && supabaseClient) {
       if (editId) {
         const { error } = await supabaseClient.from('credit_cards').update(payload).eq('id', editId);
         if (error) return alert('Error al actualizar: ' + error.message);
@@ -1583,7 +1602,7 @@
     document.getElementById('moduleServices').classList.toggle('hidden', !document.getElementById('modServices').checked);
     document.getElementById('moduleCards').classList.toggle('hidden', !document.getElementById('modCards').checked);
 
-    if (currentUser) {
+    if (currentUser && supabaseClient) {
       await supabaseClient.from('user_profiles').update({ card_monthly_limit_pct: state.limitPct }).eq('id', currentUser.id);
       triggerLogoSyncAnimation();
     }
