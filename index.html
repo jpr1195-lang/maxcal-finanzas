@@ -7,6 +7,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="MAXCAL" />
+  <link id="faviconLink" rel="icon" href="https://hufxirxqtoegkerslvuv.supabase.co/storage/v1/object/public/assets/logo-maxcala.gif" />
+  <link id="appleTouchIcon" rel="apple-touch-icon" href="https://hufxirxqtoegkerslvuv.supabase.co/storage/v1/object/public/assets/logo-maxcala.gif" />
   <title>MAXCAL — Finanzas del Hogar</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -72,9 +74,12 @@
     }
     .brand { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
     .brand-logo {
-      width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
-      background: linear-gradient(135deg, #2563eb, #0ea5e9);
-      color: #fff; font-weight: 700; display: grid; place-items: center;
+      width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+      background: var(--surface-2); border: 1px solid var(--border);
+      overflow: hidden; display: grid; place-items: center;
+    }
+    .brand-logo img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
     }
     .brand-info { min-width: 0; }
     .brand h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.02em; }
@@ -199,6 +204,7 @@
       font-size: 0.74rem; padding: 0.28rem 0.65rem; border-radius: 999px; white-space: nowrap;
       background: var(--surface); border: 1px solid var(--border); cursor: pointer;
     }
+    .chip:hover { border-color: var(--primary); color: var(--primary); }
     .ai-input-row { display: flex; gap: 0.5rem; }
 
     input, select, textarea {
@@ -278,7 +284,9 @@
 
 <header>
   <div class="brand">
-    <div class="brand-logo">M</div>
+    <div class="brand-logo">
+      <img id="headerLogoImg" src="https://hufxirxqtoegkerslvuv.supabase.co/storage/v1/object/public/assets/logo-maxcala.gif" alt="MAXCAL Logo" />
+    </div>
     <div class="brand-info">
       <h1>MAXCAL <span style="font-weight:400;color:var(--text-muted)">| Finanzas</span></h1>
       <div class="session-pill">
@@ -413,7 +421,6 @@
   </button>
 </nav>
 
-<!-- MODAL: Login / Registro Separado -->
 <div class="modal-backdrop" id="modalLogin">
   <div class="modal">
     <div class="section-header">
@@ -445,7 +452,6 @@
   </div>
 </div>
 
-<!-- MODAL: Nuevo / Editar Movimiento -->
 <div class="modal-backdrop" id="modalTx">
   <div class="modal">
     <div class="section-header">
@@ -509,7 +515,6 @@
   </div>
 </div>
 
-<!-- MODAL: Nuevo / Editar Compromiso o Préstamo -->
 <div class="modal-backdrop" id="modalCommitment">
   <div class="modal">
     <div class="section-header">
@@ -554,7 +559,6 @@
   </div>
 </div>
 
-<!-- MODAL: Nueva / Editar Tarjeta -->
 <div class="modal-backdrop" id="modalCard">
   <div class="modal">
     <div class="section-header">
@@ -580,7 +584,6 @@
   </div>
 </div>
 
-<!-- MODAL: Simulador -->
 <div class="modal-backdrop" id="modalSim">
   <div class="modal">
     <div class="section-header">
@@ -608,7 +611,6 @@
   </div>
 </div>
 
-<!-- MODAL: Módulos -->
 <div class="modal-backdrop" id="modalModules">
   <div class="modal">
     <div class="section-header">
@@ -634,8 +636,19 @@
 <script>
   const MAXCAL_CONFIG = {
     supabaseUrl: "https://hufxirxqtoegkerslvuv.supabase.co",
-    supabaseAnonKey: "sb_publishable_0FO_ns7iD0YEJ-zndT-qVA_nr9AlC_q"
+    supabaseAnonKey: "sb_publishable_0FO_ns7iD0YEJ-zndT-qVA_nr9AlC_q",
+    logoUrl: "https://hufxirxqtoegkerslvuv.supabase.co/storage/v1/object/public/assets/logo-maxcala.gif"
   };
+
+  function applyLogoAsset() {
+    if (!MAXCAL_CONFIG.logoUrl) return;
+    const img = document.getElementById('headerLogoImg');
+    const fav = document.getElementById('faviconLink');
+    const apple = document.getElementById('appleTouchIcon');
+    if (img) img.src = MAXCAL_CONFIG.logoUrl;
+    if (fav) fav.href = MAXCAL_CONFIG.logoUrl;
+    if (apple) apple.href = MAXCAL_CONFIG.logoUrl;
+  }
 
   const supabaseClient = window.supabase.createClient(
     MAXCAL_CONFIG.supabaseUrl,
@@ -660,6 +673,7 @@
   const fmtUsd = (n) => 'US$ ' + (Number(n) || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   async function initApp() {
+    applyLogoAsset();
     document.getElementById('txDate').valueAsDate = new Date();
     document.getElementById('comStartDate').valueAsDate = new Date();
 
