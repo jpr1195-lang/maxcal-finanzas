@@ -1,0 +1,1319 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MAXCAL — Finanzas del Hogar</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --surface: #ffffff;
+      --surface-2: #f8fafc;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --green: #16a34a;
+      --green-bg: #dcfce7;
+      --yellow: #d97706;
+      --yellow-bg: #fef3c7;
+      --red: #dc2626;
+      --red-bg: #fee2e2;
+      --shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
+    }
+
+    [data-theme="dark"] {
+      --bg: #0b1120;
+      --surface: #111827;
+      --surface-2: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --border: #1e293b;
+      --primary: #3b82f6;
+      --primary-hover: #60a5fa;
+      --green: #22c55e;
+      --green-bg: rgba(34, 197, 94, 0.15);
+      --yellow: #f59e0b;
+      --yellow-bg: rgba(245, 158, 11, 0.15);
+      --red: #ef4444;
+      --red-bg: rgba(239, 68, 68, 0.15);
+      --shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      transition: background 0.2s, color 0.2s;
+      line-height: 1.5;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .brand { display: flex; align-items: center; gap: 0.75rem; }
+    .brand-logo {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: linear-gradient(135deg, #2563eb, #0ea5e9);
+      color: #fff; font-weight: 700; display: grid; place-items: center;
+    }
+    .brand h1 { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.02em; }
+    .session-pill {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      font-size: 0.75rem; color: var(--text-muted); margin-top: 0.15rem;
+    }
+    .session-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted);
+    }
+    .session-dot.active { background: var(--green); }
+
+    .header-actions { display: flex; gap: 0.55rem; align-items: center; flex-wrap: wrap; }
+    button {
+      font-family: inherit; font-size: 0.84rem; font-weight: 500;
+      border-radius: 8px; padding: 0.48rem 0.85rem; cursor: pointer;
+      border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+      transition: all 0.15s;
+    }
+    button:hover { border-color: var(--primary); }
+    button.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+    button.primary:hover { background: var(--primary-hover); }
+    button.btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; border-radius: 6px; }
+    button.btn-danger:hover { border-color: var(--red); color: var(--red); }
+
+    .container { max-width: 1340px; margin: 0 auto; padding: 1.5rem; }
+
+    .quick-bar {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.75rem 1rem;
+      display: flex;
+      gap: 0.65rem;
+      align-items: center;
+      margin-bottom: 1.25rem;
+      box-shadow: var(--shadow);
+      flex-wrap: wrap;
+    }
+    .quick-bar input[type="text"] {
+      flex: 1; min-width: 240px; border: none; background: transparent; padding: 0.35rem; font-size: 0.9rem;
+    }
+
+    .quick-bar input[type="text"]:focus { outline: none; }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 1.25rem;
+      box-shadow: var(--shadow);
+    }
+    .kpi-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 500; }
+    .kpi-value { font-size: 1.65rem; font-weight: 700; margin: 0.3rem 0; letter-spacing: -0.02em; }
+    .kpi-sub { font-size: 0.78rem; color: var(--text-muted); }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      padding: 0.25rem 0.65rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600;
+    }
+    .badge.green { background: var(--green-bg); color: var(--green); }
+    .badge.yellow { background: var(--yellow-bg); color: var(--yellow); }
+    .badge.red { background: var(--red-bg); color: var(--red); }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1.6fr 1fr;
+      gap: 1.25rem;
+    }
+    @media (max-width: 960px) { .main-grid { grid-template-columns: 1fr; } }
+
+    .section-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 1rem; gap: 0.5rem; flex-wrap: wrap;
+    }
+    .section-title { font-size: 1rem; font-weight: 600; }
+
+    .segmented {
+      display: inline-flex; background: var(--surface-2);
+      border: 1px solid var(--border); border-radius: 8px; padding: 2px;
+    }
+    .segmented button {
+      border: none; background: transparent; padding: 0.3rem 0.7rem; font-size: 0.78rem;
+    }
+    .segmented button.active {
+      background: var(--surface); color: var(--primary); font-weight: 600;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    .item-row {
+      display: flex; justify-content: space-between; align-items: center; gap: 0.75rem;
+      padding: 0.75rem 0; border-bottom: 1px solid var(--border);
+    }
+    .item-row:last-child { border-bottom: none; }
+    .item-title { font-weight: 500; font-size: 0.9rem; }
+    .item-meta { font-size: 0.76rem; color: var(--text-muted); }
+    .item-right { display: flex; align-items: center; gap: 0.5rem; }
+    .progress-bar {
+      width: 100%; height: 6px; background: var(--surface-2);
+      border-radius: 999px; overflow: hidden; margin-top: 0.4rem;
+    }
+    .progress-fill { height: 100%; background: var(--primary); border-radius: 999px; }
+
+    .ai-box {
+      display: flex; flex-direction: column; height: 100%;
+      background: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
+    }
+    .ai-messages {
+      flex: 1; min-height: 210px; max-height: 310px; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 0.65rem;
+      padding: 0.5rem 0; margin-bottom: 0.75rem;
+    }
+    .msg {
+      padding: 0.65rem 0.85rem; border-radius: 10px; font-size: 0.84rem; max-width: 92%;
+    }
+    .msg.ai { background: var(--surface); border: 1px solid var(--border); align-self: flex-start; }
+    .msg.user { background: var(--primary); color: #fff; align-self: flex-end; }
+    .ai-chips { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
+    .chip {
+      font-size: 0.72rem; padding: 0.25rem 0.6rem; border-radius: 999px;
+      background: var(--surface); border: 1px solid var(--border); cursor: pointer;
+    }
+    .chip:hover { border-color: var(--primary); color: var(--primary); }
+    .ai-input-row { display: flex; gap: 0.5rem; }
+    input, select, textarea {
+      width: 100%; padding: 0.55rem 0.75rem; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--surface); color: var(--text);
+      font-family: inherit; font-size: 0.85rem;
+    }
+
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55);
+      display: none; place-items: center; z-index: 50; padding: 1rem;
+    }
+    .modal-backdrop.open { display: grid; }
+    .modal {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; width: 100%; max-width: 560px; padding: 1.5rem;
+      max-height: 90vh; overflow-y: auto;
+    }
+    .form-group { margin-bottom: 0.9rem; }
+    .form-group label { display: block; font-size: 0.8rem; font-weight: 500; margin-bottom: 0.3rem; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="brand-logo">M</div>
+    <div>
+      <h1>MAXCAL <span style="display:inline;font-weight:400;color:var(--text-muted)">| Finanzas</span></h1>
+      <div class="session-pill">
+        <span class="session-dot" id="sessionDot"></span>
+        <span id="userStatus">Sin sesión iniciada</span>
+      </div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <button onclick="openNewTxModal()" class="primary">+ Nuevo Movimiento</button>
+    <button onclick="openModal('modalSim')">Simulador Compra</button>
+    <button onclick="openModal('modalModules')">Módulos</button>
+    <button id="authBtn" onclick="handleAuthButton()">Iniciar Sesión</button>
+    <button onclick="toggleTheme()" id="themeBtn">🌙</button>
+  </div>
+</header>
+
+<div class="container">
+  <div class="quick-bar">
+    <span style="font-size:1.1rem">⚡</span>
+    <input type="text" id="quickInput" placeholder="Carga rápida: Ej. 'Gasté 120000 en supermercado con Visa en 3 cuotas' o 'USD 150 compra exterior'" onkeydown="if(event.key==='Enter') parseQuickEntry()" />
+    <button class="primary" onclick="parseQuickEntry()">Cargar al Form</button>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="card">
+      <div class="kpi-label">Ingresos Mensuales Estimados</div>
+      <div class="kpi-value" id="kpiIncome">$ 0</div>
+      <div class="kpi-sub">Promedio últimos 3 meses</div>
+    </div>
+    <div class="card">
+      <div class="kpi-label">Compromisos Fijos + Préstamos</div>
+      <div class="kpi-value" id="kpiCommitments">$ 0</div>
+      <div class="kpi-sub">Vivienda, servicios, seguros y cuotas fijas</div>
+    </div>
+    <div class="card">
+      <div class="kpi-label">Resumen Tarjetas (Este Mes)</div>
+      <div class="kpi-value" id="kpiCards">$ 0</div>
+      <div class="kpi-sub" id="kpiCardsUsd">Incluye USD convertido: US$ 0</div>
+      <div id="kpiSemaphore" style="margin-top:0.35rem;"></div>
+    </div>
+    <div class="card">
+      <div class="kpi-label">Excedente Libre Proyectado</div>
+      <div class="kpi-value" id="kpiFree" style="color: var(--green)">$ 0</div>
+      <div class="kpi-sub">Disponible para ahorro o gastos diarios</div>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+      <div class="card">
+        <div class="section-header">
+          <div class="section-title">Proyección de Flujo y Cuotas (Próximos 12 Meses)</div>
+          <span class="kpi-sub">Tarjetas + Compromisos Fijos</span>
+        </div>
+        <canvas id="projectionChart" height="115"></canvas>
+      </div>
+
+      <div class="card" id="moduleLoans">
+        <div class="section-header">
+          <div class="section-title">Préstamos y Planes con Plazo (Auto, Créditos, MP)</div>
+          <button onclick="openNewCommitmentModal('loan_installment')">+ Agregar Plan / Préstamo</button>
+        </div>
+        <div id="loansList"></div>
+      </div>
+
+      <div class="card" id="moduleServices">
+        <div class="section-header">
+          <div class="section-title">Servicios, Vivienda y Seguros</div>
+          <div style="display:flex; gap:0.5rem; align-items:center;">
+            <div class="segmented">
+              <button id="btnGrouped" class="active" onclick="setServicesMode('grouped')">Agrupado</button>
+              <button id="btnItemized" onclick="setServicesMode('itemized')">Discriminado</button>
+            </div>
+            <button onclick="openNewCommitmentModal('service')">+ Agregar</button>
+          </div>
+        </div>
+        <div id="servicesList"></div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+      <div class="card ai-box">
+        <div class="section-header">
+          <div class="section-title">Asistente IA MAXCAL</div>
+          <span class="badge green">Online</span>
+        </div>
+        <div class="ai-messages" id="aiMessages">
+          <div class="msg ai">
+            Hola. Preguntame cuántas cuotas te quedan, cuánto impactan tus consumos en dólares o cuándo podés volver a comprar con tarjeta.
+          </div>
+        </div>
+        <div class="ai-chips">
+          <span class="chip" onclick="askPreset('¿Cuántas cuotas me quedan y cuánto se libera?')">¿Cuántas cuotas me quedan?</span>
+          <span class="chip" onclick="askPreset('¿Cuándo puedo volver a comprar algo en 6 cuotas?')">¿Cuándo vuelvo a comprar?</span>
+          <span class="chip" onclick="askPreset('¿Cuánto llevo en dólares en tarjetas?')">Consumos en USD</span>
+        </div>
+        <div class="ai-input-row">
+          <input type="text" id="aiInput" placeholder="Escribí tu consulta..." onkeydown="if(event.key==='Enter') sendAiQuery()" />
+          <button class="primary" onclick="sendAiQuery()">Enviar</button>
+        </div>
+      </div>
+
+      <div class="card" id="moduleCards">
+        <div class="section-header">
+          <div class="section-title">Tarjetas y Cuotas (Bancos / MercadoPago / USD)</div>
+          <div style="display:flex; gap:0.4rem;">
+            <button onclick="openCardModal()">+ Tarjeta</button>
+          </div>
+        </div>
+        <div id="cardsSummaryChips" style="display:flex; gap:0.4rem; flex-wrap:wrap; margin-bottom:0.65rem;"></div>
+        <div id="cardInstallmentsList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Login / Registro -->
+<div class="modal-backdrop" id="modalLogin">
+  <div class="modal">
+    <div class="section-header">
+      <div class="section-title">Iniciar Sesión en MAXCAL</div>
+      <button onclick="closeModal('modalLogin')">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Nombre para mostrar (opcional al crear cuenta)</label>
+      <input type="text" id="loginName" placeholder="Ej: Juan Pablo" />
+    </div>
+    <div class="form-group">
+      <label>Correo electrónico</label>
+      <input type="email" id="loginEmail" placeholder="tu@correo.com" />
+    </div>
+    <div class="form-group">
+      <label>Contraseña</label>
+      <input type="password" id="loginPassword" placeholder="Mínimo 6 caracteres" />
+    </div>
+    <div style="display:flex; gap:0.6rem;">
+      <button class="primary" style="flex:1" onclick="loginWithEmail()">Iniciar Sesión</button>
+      <button style="flex:1" onclick="signUpWithEmail()">Crear Cuenta</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Nuevo / Editar Movimiento -->
+<div class="modal-backdrop" id="modalTx">
+  <div class="modal">
+    <div class="section-header">
+      <div class="section-title" id="txModalTitle">Registrar Movimiento</div>
+      <button onclick="closeModal('modalTx')">✕</button>
+    </div>
+    <input type="hidden" id="txEditId" />
+    <div class="form-row">
+      <div class="form-group">
+        <label>Tipo</label>
+        <select id="txType">
+          <option value="expense">Egreso / Compra</option>
+          <option value="income">Ingreso</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Fecha</label>
+        <input type="date" id="txDate" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Descripción</label>
+      <input type="text" id="txDesc" placeholder="Ej: Compra exterior / Supermercado / Sueldo" />
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Moneda</label>
+        <select id="txCurrency" onchange="toggleFxField()">
+          <option value="ARS">Pesos (ARS)</option>
+          <option value="USD">Dólares (USD)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Monto Total</label>
+        <input type="number" step="0.01" id="txAmount" placeholder="150000" />
+      </div>
+    </div>
+    <div class="form-group hidden" id="fxRateGroup">
+      <label>Cotización de referencia ($ ARS por 1 USD para calcular impacto en pesos)</label>
+      <input type="number" step="0.01" id="txFxRate" value="1450" />
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Medio de Pago</label>
+        <select id="txMethod" onchange="toggleCardFields()">
+          <option value="debit">Débito / Transferencia</option>
+          <option value="cash">Efectivo</option>
+          <option value="credit_card">Tarjeta de Crédito / MP</option>
+        </select>
+      </div>
+      <div class="form-group hidden" id="txInstallmentsWrap">
+        <label>Cantidad de Cuotas</label>
+        <input type="number" id="txInstallments" value="1" min="1" max="36" />
+      </div>
+    </div>
+    <div class="form-group hidden" id="cardSelectGroup">
+      <label>Tarjeta (Banco o MercadoPago)</label>
+      <select id="txCardId"></select>
+    </div>
+    <button class="primary" style="width:100%" onclick="saveTransaction()">Guardar Cambios</button>
+  </div>
+</div>
+
+<!-- MODAL: Nuevo / Editar Compromiso o Préstamo -->
+<div class="modal-backdrop" id="modalCommitment">
+  <div class="modal">
+    <div class="section-header">
+      <div class="section-title" id="comModalTitle">Compromiso Fijo o Préstamo</div>
+      <button onclick="closeModal('modalCommitment')">✕</button>
+    </div>
+    <input type="hidden" id="comEditId" />
+    <div class="form-group">
+      <label>Tipo</label>
+      <select id="comType" onchange="toggleLoanFields()">
+        <option value="service">Servicio (Luz, Gas, Internet, Agua)</option>
+        <option value="loan_installment">Préstamo / Cuota Vehículo / Crédito MP (con plazo)</option>
+        <option value="insurance">Seguro (Auto, Hogar, Vida)</option>
+        <option value="rent">Alquiler / Vivienda</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Nombre</label>
+      <input type="text" id="comTitle" placeholder="Ej: Cuota Auto / Crédito MercadoPago / Luz" />
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Monto Mensual ($)</label>
+        <input type="number" step="0.01" id="comAmount" placeholder="320000" />
+      </div>
+      <div class="form-group">
+        <label>Día de Vencimiento</label>
+        <input type="number" id="comDueDay" value="10" min="1" max="31" />
+      </div>
+    </div>
+    <div class="form-row hidden" id="loanFieldsRow">
+      <div class="form-group">
+        <label>Total de Cuotas</label>
+        <input type="number" id="comTotalInst" placeholder="60" />
+      </div>
+      <div class="form-group">
+        <label>Mes Cuota 1</label>
+        <input type="date" id="comStartDate" />
+      </div>
+    </div>
+    <button class="primary" style="width:100%" onclick="saveCommitment()">Guardar Compromiso</button>
+  </div>
+</div>
+
+<!-- MODAL: Nueva / Editar Tarjeta -->
+<div class="modal-backdrop" id="modalCard">
+  <div class="modal">
+    <div class="section-header">
+      <div class="section-title" id="cardModalTitle">Tarjeta de Crédito / MercadoPago</div>
+      <button onclick="closeModal('modalCard')">✕</button>
+    </div>
+    <input type="hidden" id="cardEditId" />
+    <div class="form-group">
+      <label>Nombre</label>
+      <input type="text" id="cardName" placeholder="Ej: Visa Banco / Mastercard / MercadoPago" />
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Día de Cierre</label>
+        <input type="number" id="cardClosing" value="24" min="1" max="31" />
+      </div>
+      <div class="form-group">
+        <label>Día de Vencimiento</label>
+        <input type="number" id="cardDue" value="5" min="1" max="31" />
+      </div>
+    </div>
+    <button class="primary" style="width:100%" onclick="saveCard()">Guardar Tarjeta</button>
+  </div>
+</div>
+
+<!-- MODAL: Simulador -->
+<div class="modal-backdrop" id="modalSim">
+  <div class="modal">
+    <div class="section-header">
+      <div class="section-title">Simulador Inteligente de Compra</div>
+      <button onclick="closeModal('modalSim')">✕</button>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Monto de la Compra ($ ARS)</label>
+        <input type="number" id="simAmount" value="600000" />
+      </div>
+      <div class="form-group">
+        <label>Cuotas</label>
+        <input type="number" id="simInstallments" value="6" min="1" max="24" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Tarjeta a utilizar</label>
+      <select id="simCardId"></select>
+    </div>
+    <button class="primary" style="width:100%; margin-bottom:1rem;" onclick="runPurchaseSimulation()">Evaluar Impacto</button>
+    <div id="simResult" class="msg ai" style="max-width:100%">
+      Ingresá un monto y cuotas para verificar si entra dentro de tu límite saludable o si conviene esperar al cierre.
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Módulos -->
+<div class="modal-backdrop" id="modalModules">
+  <div class="modal">
+    <div class="section-header">
+      <div class="section-title">Módulos y Límites del Hogar</div>
+      <button onclick="closeModal('modalModules')">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Tope saludable de tarjetas (% sobre ingresos)</label>
+      <input type="number" id="cfgLimitPct" value="30" min="5" max="80" />
+    </div>
+    <div class="form-group">
+      <label>Módulos Activos</label>
+      <div style="display:flex; flex-direction:column; gap:0.45rem; font-size:0.85rem;">
+        <label><input type="checkbox" id="modLoans" checked style="width:auto"> Préstamos / Cuota Vehículo / Créditos</label>
+        <label><input type="checkbox" id="modServices" checked style="width:auto"> Servicios, Vivienda y Seguros</label>
+        <label><input type="checkbox" id="modCards" checked style="width:auto"> Tarjetas de Crédito y Cuotas</label>
+      </div>
+    </div>
+    <button class="primary" style="width:100%" onclick="saveModulesConfig()">Aplicar Cambios</button>
+  </div>
+</div>
+
+<script>
+  const MAXCAL_CONFIG = {
+    supabaseUrl: "https://hufxirxqtoegkerslvuv.supabase.co",
+    supabaseAnonKey: "sb_publishable_0FO_ns7iD0YEJ-zndT-qVA_nr9AlC_q"
+  };
+
+  const supabaseClient = window.supabase.createClient(
+    MAXCAL_CONFIG.supabaseUrl,
+    MAXCAL_CONFIG.supabaseAnonKey
+  );
+
+  let currentUser = null;
+  let userLabel = "";
+  let servicesViewMode = 'grouped';
+  let chartInstance = null;
+
+  let state = {
+    income: 0,
+    limitPct: 30,
+    cards: [],
+    commitments: [],
+    transactions: [],
+    installments: []
+  };
+
+  const fmtArs = (n) => '$ ' + Math.round(Number(n) || 0).toLocaleString('es-AR');
+  const fmtUsd = (n) => 'US$ ' + (Number(n) || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  async function initApp() {
+    document.getElementById('txDate').valueAsDate = new Date();
+    document.getElementById('comStartDate').valueAsDate = new Date();
+
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session?.user) {
+      await applyAuthenticatedSession(session.user);
+    } else {
+      setSessionUI(null, "");
+      renderAll();
+    }
+  }
+
+  async function applyAuthenticatedSession(user) {
+    currentUser = user;
+    let displayName = user.user_metadata?.full_name || user.email;
+    try {
+      const { data: prof } = await supabaseClient
+        .from('user_profiles')
+        .select('display_name, card_monthly_limit_pct, services_view_mode')
+        .eq('id', user.id)
+        .single();
+      if (prof?.display_name) displayName = prof.display_name;
+      if (prof?.card_monthly_limit_pct) state.limitPct = Number(prof.card_monthly_limit_pct);
+      if (prof?.services_view_mode) setServicesMode(prof.services_view_mode, false);
+    } catch (_) {}
+
+    userLabel = `${displayName} (${user.email})`;
+    setSessionUI(true, userLabel);
+    await loadFromSupabase();
+  }
+
+  function setSessionUI(isLoggedIn, label) {
+    const dot = document.getElementById('sessionDot');
+    const status = document.getElementById('userStatus');
+    const btn = document.getElementById('authBtn');
+    if (isLoggedIn) {
+      dot.classList.add('active');
+      status.textContent = `Sesión iniciada: ${label}`;
+      btn.textContent = 'Cerrar Sesión';
+    } else {
+      dot.classList.remove('active');
+      status.textContent = 'Sin sesión iniciada (iniciá sesión para guardar en la nube)';
+      btn.textContent = 'Iniciar Sesión';
+    }
+  }
+
+  function handleAuthButton() {
+    if (currentUser) logoutUser();
+    else openModal('modalLogin');
+  }
+
+  async function loginWithEmail() {
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    if (!email || !password) return;
+
+    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) {
+      alert('Error al iniciar sesión: ' + error.message);
+      return;
+    }
+    closeModal('modalLogin');
+    await applyAuthenticatedSession(data.user);
+  }
+
+  async function signUpWithEmail() {
+    const fullName = document.getElementById('loginName').value.trim();
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    if (!email || !password) return;
+
+    const { data, error } = await supabaseClient.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: fullName || undefined } }
+    });
+    if (error) {
+      alert('Error al crear cuenta: ' + error.message);
+      return;
+    }
+    if (data.user && data.session) {
+      if (fullName) {
+        await supabaseClient.from('user_profiles').update({ display_name: fullName }).eq('id', data.user.id);
+      }
+      closeModal('modalLogin');
+      await applyAuthenticatedSession(data.user);
+    } else {
+      alert('Cuenta creada. Revisá tu correo si tenés confirmación activa o iniciá sesión.');
+    }
+  }
+
+  async function logoutUser() {
+    await supabaseClient.auth.signOut();
+    currentUser = null;
+    userLabel = "";
+    state = { income: 0, limitPct: 30, cards: [], commitments: [], transactions: [], installments: [] };
+    setSessionUI(false, "");
+    renderAll();
+  }
+
+  async function loadFromSupabase() {
+    if (!currentUser) return;
+    const [cardsRes, comRes, loansRes, txRes, instRes, projRes] = await Promise.all([
+      supabaseClient.from('credit_cards').select('*').eq('is_active', true).order('created_at'),
+      supabaseClient.from('commitments').select('*').eq('is_active', true).order('created_at'),
+      supabaseClient.from('vw_loans_progress').select('*'),
+      supabaseClient.from('transactions').select('*').order('transaction_date', { ascending: false }),
+      supabaseClient.from('vw_card_installments_schedule').select('*').gte('billing_month', new Date().toISOString().slice(0, 7) + '-01'),
+      supabaseClient.from('vw_12_month_projection').select('*')
+    ]);
+
+    state.cards = cardsRes.data || [];
+    const loansMap = new Map((loansRes.data || []).map(l => [l.commitment_id, l]));
+    state.commitments = (comRes.data || []).map(c => ({ ...c, ...(loansMap.get(c.id) || {}) }));
+    state.transactions = txRes.data || [];
+    state.installments = (instRes.data || []).map(i => ({
+      ...i,
+      remaining: i.remaining_installments_after
+    }));
+
+    if (projRes.data && projRes.data.length > 0) {
+      state.income = Number(projRes.data[0].estimated_income) || 0;
+    } else {
+      state.income = state.transactions
+        .filter(t => t.type === 'income')
+        .reduce((acc, t) => acc + Number(t.amount), 0);
+    }
+
+    renderAll();
+  }
+
+  function parseQuickEntry() {
+    const raw = document.getElementById('quickInput').value.trim();
+    if (!raw) return;
+
+    const isUsd = /\busd\b|\bdolar\b|\bdólar\b|u\$s/i.test(raw);
+    const cleanNum = raw.replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.');
+    const amountMatch = cleanNum.match(/(\d+(?:\.\d+)?)/);
+    const amount = amountMatch ? Number(amountMatch[1]) : 0;
+    const quotasMatch = raw.match(/(\d+)\s*cuota/i);
+    const quotas = quotasMatch ? Number(quotasMatch[1]) : 1;
+    const isIncome = /sueldo|ingreso|cobré|cobre/i.test(raw);
+    const isCard = quotas > 1 || /visa|master|mp|mercadopago|mercado pago|tarjeta|crédito|credito/i.test(raw);
+
+    openNewTxModal();
+    document.getElementById('txType').value = isIncome ? 'income' : 'expense';
+    document.getElementById('txCurrency').value = isUsd ? 'USD' : 'ARS';
+    toggleFxField();
+    document.getElementById('txAmount').value = amount || '';
+    document.getElementById('txDesc').value = raw;
+    document.getElementById('txMethod').value = isCard ? 'credit_card' : 'debit';
+    document.getElementById('txInstallments').value = quotas;
+    toggleCardFields();
+
+    if (isCard && state.cards.length > 0) {
+      const matched = state.cards.find(c => raw.toLowerCase().includes(c.name.toLowerCase().split(' ')[0]));
+      if (matched) document.getElementById('txCardId').value = matched.id;
+    }
+
+    document.getElementById('quickInput').value = '';
+  }
+
+  function getTxEffectiveArs(tx) {
+    const amt = Number(tx.amount) || 0;
+    if (tx.currency === 'USD') {
+      const fx = Number(tx.fx_rate) || 1450;
+      return amt * fx;
+    }
+    return amt;
+  }
+
+  function renderAll() {
+    populateSelects();
+    renderKPIs();
+    renderLoans();
+    renderServices();
+    renderCardsAndInstallments();
+    renderChart();
+  }
+
+  function populateSelects() {
+    const opts = state.cards.length > 0
+      ? state.cards.map(c => `<option value="${c.id}">${c.name} (Cierre ${c.closing_day})</option>`).join('')
+      : `<option value="">Sin tarjetas cargadas</option>`;
+    document.getElementById('txCardId').innerHTML = opts;
+    document.getElementById('simCardId').innerHTML = opts;
+  }
+
+  function renderKPIs() {
+    const totalCommitments = state.commitments.reduce((acc, c) => acc + Number(c.amount), 0);
+    const currentMonthPrefix = new Date().toISOString().slice(0, 7);
+
+    const currentMonthInstallments = currentUser
+      ? state.installments.filter(i => (i.billing_month || '').startsWith(currentMonthPrefix))
+      : state.installments;
+
+    const totalCardsArs = currentMonthInstallments.reduce((acc, i) => acc + Number(i.installment_amount), 0);
+    const usdTxList = state.transactions.filter(t => t.type === 'expense' && t.currency === 'USD');
+    const totalUsd = usdTxList.reduce((acc, t) => acc + Number(t.amount), 0);
+
+    const freeCash = state.income - totalCommitments - totalCardsArs;
+    const cardRatio = state.income > 0 ? (totalCardsArs / state.income) * 100 : 0;
+
+    document.getElementById('kpiIncome').textContent = fmtArs(state.income);
+    document.getElementById('kpiCommitments').textContent = fmtArs(totalCommitments);
+    document.getElementById('kpiCards').textContent = fmtArs(totalCardsArs);
+    document.getElementById('kpiCardsUsd').textContent = `Consumos registrados en USD: ${fmtUsd(totalUsd)}`;
+    document.getElementById('kpiFree').textContent = fmtArs(freeCash);
+    document.getElementById('kpiFree').style.color = freeCash >= 0 ? 'var(--green)' : 'var(--red)';
+
+    let semHtml = `<span class="badge green">● Óptimo (${cardRatio.toFixed(1)}% de ingresos)</span>`;
+    if (state.income === 0 && totalCardsArs === 0) {
+      semHtml = `<span class="badge yellow">● Cargá tus ingresos y tarjetas para activar</span>`;
+    } else if (cardRatio > state.limitPct + 10) {
+      semHtml = `<span class="badge red">● Límite superado (${cardRatio.toFixed(1)}%)</span>`;
+    } else if (cardRatio > state.limitPct) {
+      semHtml = `<span class="badge yellow">● Precaución (${cardRatio.toFixed(1)}%)</span>`;
+    }
+    document.getElementById('kpiSemaphore').innerHTML = semHtml;
+  }
+
+  function renderLoans() {
+    const loans = state.commitments.filter(c => c.commitment_type === 'loan_installment');
+    const container = document.getElementById('loansList');
+    if (loans.length === 0) {
+      container.innerHTML = `<div class="kpi-sub">Sin préstamos ni cuotas con plazo cargadas.</div>`;
+      return;
+    }
+    container.innerHTML = loans.map(l => {
+      const curr = l.current_installment || 1;
+      const tot = l.total_installments || 1;
+      const rem = l.remaining_installments ?? Math.max(0, tot - curr);
+      const pct = Math.min(100, Math.round((curr / tot) * 100));
+      return `
+        <div class="item-row" style="flex-direction:column; align-items:stretch;">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:0.5rem;">
+            <div>
+              <div class="item-title">${l.title}</div>
+              <div class="item-meta">Cuota ${curr} de ${tot} • Restan ${rem} cuotas (Vence día ${l.due_day || 10})</div>
+            </div>
+            <div class="item-right">
+              <span style="font-weight:600;">${fmtArs(l.amount)}/mes</span>
+              <button class="btn-sm" onclick="editCommitment('${l.id}')">✏️</button>
+              <button class="btn-sm btn-danger" onclick="deleteCommitment('${l.id}')">🗑️</button>
+            </div>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function setServicesMode(mode, persist = true) {
+    servicesViewMode = mode;
+    document.getElementById('btnGrouped').classList.toggle('active', mode === 'grouped');
+    document.getElementById('btnItemized').classList.toggle('active', mode === 'itemized');
+    renderServices();
+
+    if (persist && currentUser) {
+      await supabaseClient.from('user_profiles').update({ services_view_mode: mode }).eq('id', currentUser.id);
+    }
+  }
+
+  function renderServices() {
+    const items = state.commitments.filter(c => c.commitment_type !== 'loan_installment');
+    const container = document.getElementById('servicesList');
+
+    if (items.length === 0) {
+      container.innerHTML = `<div class="kpi-sub">Sin servicios, alquiler ni seguros cargados.</div>`;
+      return;
+    }
+
+    if (servicesViewMode === 'grouped') {
+      const groups = {};
+      items.forEach(item => {
+        const key = item.commitment_type === 'service' ? 'Servicios del Hogar'
+                  : item.commitment_type === 'insurance' ? 'Seguros'
+                  : 'Vivienda / Alquiler';
+        if (!groups[key]) groups[key] = { total: 0, count: 0 };
+        groups[key].total += Number(item.amount);
+        groups[key].count += 1;
+      });
+
+      container.innerHTML = Object.entries(groups).map(([name, g]) => `
+        <div class="item-row">
+          <div>
+            <div class="item-title">${name}</div>
+            <div class="item-meta">${g.count} conceptos agrupados (cambiá a Discriminado para editar cada uno)</div>
+          </div>
+          <div style="font-weight:600;">${fmtArs(g.total)}</div>
+        </div>
+      `).join('');
+    } else {
+      container.innerHTML = items.map(i => `
+        <div class="item-row">
+          <div>
+            <div class="item-title">${i.title}</div>
+            <div class="item-meta">Vence el día ${i.due_day || '-'} • ${i.commitment_type}</div>
+          </div>
+          <div class="item-right">
+            <span style="font-weight:600;">${fmtArs(i.amount)}</span>
+            <button class="btn-sm" onclick="editCommitment('${i.id}')">✏️</button>
+            <button class="btn-sm btn-danger" onclick="deleteCommitment('${i.id}')">🗑️</button>
+          </div>
+        </div>
+      `).join('');
+    }
+  }
+
+  function renderCardsAndInstallments() {
+    const chipsEl = document.getElementById('cardsSummaryChips');
+    const listEl = document.getElementById('cardInstallmentsList');
+
+    if (state.cards.length === 0) {
+      chipsEl.innerHTML = `<span class="kpi-sub">Agregá tus tarjetas de crédito o MercadoPago.</span>`;
+    } else {
+      chipsEl.innerHTML = state.cards.map(c => `
+        <span class="chip" style="display:inline-flex; align-items:center; gap:0.35rem;">
+          <strong>${c.name}</strong> (Cierre ${c.closing_day} / Vto ${c.due_day})
+          <button class="btn-sm" style="padding:0.05rem 0.3rem;" onclick="editCard('${c.id}')">✏️</button>
+          <button class="btn-sm btn-danger" style="padding:0.05rem 0.3rem;" onclick="deleteCard('${c.id}')">✕</button>
+        </span>
+      `).join('');
+    }
+
+    const cardTx = state.transactions.filter(t => t.payment_method === 'credit_card');
+    if (cardTx.length === 0 && state.installments.length === 0) {
+      listEl.innerHTML = `<div class="kpi-sub" style="margin-top:0.5rem;">Sin compras en cuotas cargadas.</div>`;
+      return;
+    }
+
+    if (cardTx.length > 0) {
+      listEl.innerHTML = cardTx.map(t => {
+        const card = state.cards.find(c => c.id === t.credit_card_id);
+        const isUsd = t.currency === 'USD';
+        const quotaVal = isUsd ? fmtUsd(Number(t.amount) / (t.installments_total || 1)) : fmtArs(getTxEffectiveArs(t) / (t.installments_total || 1));
+        return `
+          <div class="item-row">
+            <div>
+              <div class="item-title">${t.description} ${isUsd ? '<span class="badge yellow">USD</span>' : ''}</div>
+              <div class="item-meta">${card ? card.name : 'Tarjeta'} • ${t.installments_total || 1} cuotas (${quotaVal}/cuota)</div>
+            </div>
+            <div class="item-right">
+              <span style="font-weight:600;">${isUsd ? fmtUsd(t.amount) : fmtArs(t.amount)}</span>
+              <button class="btn-sm" onclick="editTransaction('${t.id}')">✏️</button>
+              <button class="btn-sm btn-danger" onclick="deleteTransaction('${t.id}')">🗑️</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } else {
+      listEl.innerHTML = state.installments.map(i => `
+        <div class="item-row">
+          <div>
+            <div class="item-title">${i.description}</div>
+            <div class="item-meta">${i.card_name} • Cuota ${i.installment_number}/${i.installments_total}</div>
+          </div>
+          <div style="font-weight:600;">${fmtArs(i.installment_amount)}</div>
+        </div>
+      `).join('');
+    }
+  }
+
+  function renderChart() {
+    const ctx = document.getElementById('projectionChart').getContext('2d');
+    const labels = [];
+    const cardsData = [];
+    const fixedData = [];
+
+    const now = new Date();
+    const baseFixed = state.commitments.reduce((acc, c) => acc + Number(c.amount), 0);
+
+    for (let m = 0; m < 12; m++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + m, 1);
+      labels.push(d.toLocaleDateString('es-AR', { month: 'short', year: '2-digit' }));
+
+      const monthCards = state.transactions
+        .filter(t => t.type === 'expense' && t.payment_method === 'credit_card')
+        .reduce((acc, t) => {
+          const totalQ = Number(t.installments_total) || 1;
+          const start = new Date(t.first_billing_month || t.transaction_date);
+          const diffMonths = (d.getFullYear() - start.getFullYear()) * 12 + (d.getMonth() - start.getMonth());
+          if (diffMonths >= 0 && diffMonths < totalQ) {
+            return acc + (getTxEffectiveArs(t) / totalQ);
+          }
+          return acc;
+        }, 0);
+
+      cardsData.push(Math.round(monthCards));
+      fixedData.push(Math.round(baseFixed));
+    }
+
+    if (chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Compromisos Fijos + Préstamos', data: fixedData, backgroundColor: '#3b82f6', borderRadius: 4 },
+          { label: 'Cuotas Tarjetas (ARS + USD conv.)', data: cardsData, backgroundColor: '#f59e0b', borderRadius: 4 }
+        ]
+      },
+      options: {
+        responsive: true,
+        scales: { x: { stacked: true }, y: { stacked: true } },
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+  }
+
+  function runPurchaseSimulation() {
+    const amount = Number(document.getElementById('simAmount').value);
+    const quotas = Number(document.getElementById('simInstallments').value) || 1;
+    const cardId = document.getElementById('simCardId').value;
+    const card = state.cards.find(c => c.id === cardId) || state.cards[0];
+    const monthlyQuota = amount / quotas;
+
+    const currentCards = state.transactions
+      .filter(t => t.type === 'expense' && t.payment_method === 'credit_card')
+      .reduce((acc, t) => acc + (getTxEffectiveArs(t) / (Number(t.installments_total) || 1)), 0);
+
+    const newTotalCards = currentCards + monthlyQuota;
+    const newRatio = state.income > 0 ? (newTotalCards / state.income) * 100 : 100;
+    const todayDay = new Date().getDate();
+
+    const timingAdvice = (card && todayDay > card.closing_day)
+      ? `Como hoy ya pasó el cierre de ${card.name} (día ${card.closing_day}), entra en el próximo ciclo.`
+      : card
+        ? `${card.name} cierra el día ${card.closing_day}: si esperás al cierre, ganás días de financiación.`
+        : `Cargá una tarjeta para evaluar su fecha de cierre.`;
+
+    const verdict = newRatio <= state.limitPct
+      ? `✅ <strong>VIABLE:</strong> Sumás ${fmtArs(monthlyQuota)}/mes en ${quotas} cuotas (${newRatio.toFixed(1)}% de tus ingresos, dentro de tu tope del ${state.limitPct}%).`
+      : `⚠️ <strong>PRECAUCIÓN:</strong> Llevaría tus tarjetas al ${newRatio.toFixed(1)}% de tus ingresos (arriba de tu tope del ${state.limitPct}%).`;
+
+    document.getElementById('simResult').innerHTML = `${verdict}<br><br>${timingAdvice}`;
+  }
+
+  function askPreset(text) {
+    document.getElementById('aiInput').value = text;
+    sendAiQuery();
+  }
+
+  async function sendAiQuery() {
+    const input = document.getElementById('aiInput');
+    const q = input.value.trim();
+    if (!q) return;
+
+    const box = document.getElementById('aiMessages');
+    box.innerHTML += `<div class="msg user">${q}</div>`;
+    input.value = '';
+
+    const usdSum = state.transactions
+      .filter(t => t.type === 'expense' && t.currency === 'USD')
+      .reduce((acc, t) => acc + Number(t.amount), 0);
+    const loan = state.commitments.find(c => c.commitment_type === 'loan_installment');
+
+    let reply = '';
+    const lower = q.toLowerCase();
+    if (lower.includes('usd') || lower.includes('dólar') || lower.includes('dolar')) {
+      reply = `Tenés registrados <strong>${fmtUsd(usdSum)}</strong> en compras/consumos en dólares.`;
+    } else if (lower.includes('auto') || lower.includes('préstamo') || lower.includes('cuota')) {
+      reply = loan
+        ? `En <strong>${loan.title}</strong> vas por la cuota ${loan.current_installment || 1} de ${loan.total_installments} (${fmtArs(loan.amount)}/mes).`
+        : `Actualmente tenés ${state.transactions.filter(t => t.payment_method === 'credit_card').length} compras con tarjeta registradas.`;
+    } else {
+      reply = `Tu ingreso estimado es <strong>${fmtArs(state.income)}</strong> y tus compromisos fijos suman <strong>${fmtArs(state.commitments.reduce((a,b)=>a+Number(b.amount),0))}</strong>.`;
+    }
+
+    box.innerHTML += `<div class="msg ai">${reply}</div>`;
+    box.scrollTop = box.scrollHeight;
+  }
+
+  // =========================================================================
+  // ABRIR / EDITAR / ELIMINAR EN TODOS LOS MÓDULOS
+  // =========================================================================
+  function openNewTxModal() {
+    document.getElementById('txModalTitle').textContent = 'Registrar Movimiento';
+    document.getElementById('txEditId').value = '';
+    document.getElementById('txType').value = 'expense';
+    document.getElementById('txDate').valueAsDate = new Date();
+    document.getElementById('txDesc').value = '';
+    document.getElementById('txCurrency').value = 'ARS';
+    document.getElementById('txAmount').value = '';
+    document.getElementById('txMethod').value = 'debit';
+    document.getElementById('txInstallments').value = 1;
+    toggleFxField();
+    toggleCardFields();
+    openModal('modalTx');
+  }
+
+  function editTransaction(id) {
+    const tx = state.transactions.find(t => t.id === id);
+    if (!tx) return;
+    document.getElementById('txModalTitle').textContent = 'Editar Movimiento';
+    document.getElementById('txEditId').value = tx.id;
+    document.getElementById('txType').value = tx.type;
+    document.getElementById('txDate').value = (tx.transaction_date || '').slice(0, 10);
+    document.getElementById('txDesc').value = tx.description;
+    document.getElementById('txCurrency').value = tx.currency || 'ARS';
+    document.getElementById('txAmount').value = tx.amount;
+    document.getElementById('txFxRate').value = tx.fx_rate || 1450;
+    document.getElementById('txMethod').value = tx.payment_method;
+    document.getElementById('txInstallments').value = tx.installments_total || 1;
+    toggleFxField();
+    toggleCardFields();
+    if (tx.credit_card_id) document.getElementById('txCardId').value = tx.credit_card_id;
+    openModal('modalTx');
+  }
+
+  async function deleteTransaction(id) {
+    if (!confirm('¿Eliminar este movimiento?')) return;
+    if (currentUser) {
+      await supabaseClient.from('transactions').delete().eq('id', id);
+      await loadFromSupabase();
+    } else {
+      state.transactions = state.transactions.filter(t => t.id !== id);
+      renderAll();
+    }
+  }
+
+  function openNewCommitmentModal(defaultType = 'service') {
+    document.getElementById('comModalTitle').textContent = 'Nuevo Compromiso / Préstamo';
+    document.getElementById('comEditId').value = '';
+    document.getElementById('comType').value = defaultType;
+    document.getElementById('comTitle').value = '';
+    document.getElementById('comAmount').value = '';
+    document.getElementById('comDueDay').value = 10;
+    document.getElementById('comTotalInst').value = '';
+    document.getElementById('comStartDate').valueAsDate = new Date();
+    toggleLoanFields();
+    openModal('modalCommitment');
+  }
+
+  function editCommitment(id) {
+    const c = state.commitments.find(item => item.id === id);
+    if (!c) return;
+    document.getElementById('comModalTitle').textContent = 'Editar Compromiso / Préstamo';
+    document.getElementById('comEditId').value = c.id;
+    document.getElementById('comType').value = c.commitment_type;
+    document.getElementById('comTitle').value = c.title;
+    document.getElementById('comAmount').value = c.amount;
+    document.getElementById('comDueDay').value = c.due_day || 10;
+    document.getElementById('comTotalInst').value = c.total_installments || '';
+    if (c.start_date) document.getElementById('comStartDate').value = c.start_date.slice(0, 10);
+    toggleLoanFields();
+    openModal('modalCommitment');
+  }
+
+  async function deleteCommitment(id) {
+    if (!confirm('¿Eliminar este compromiso/préstamo?')) return;
+    if (currentUser) {
+      await supabaseClient.from('commitments').delete().eq('id', id);
+      await loadFromSupabase();
+    } else {
+      state.commitments = state.commitments.filter(c => c.id !== id);
+      renderAll();
+    }
+  }
+
+  function openCardModal() {
+    document.getElementById('cardModalTitle').textContent = 'Nueva Tarjeta';
+    document.getElementById('cardEditId').value = '';
+    document.getElementById('cardName').value = '';
+    document.getElementById('cardClosing').value = 24;
+    document.getElementById('cardDue').value = 5;
+    openModal('modalCard');
+  }
+
+  function editCard(id) {
+    const card = state.cards.find(c => c.id === id);
+    if (!card) return;
+    document.getElementById('cardModalTitle').textContent = 'Editar Tarjeta';
+    document.getElementById('cardEditId').value = card.id;
+    document.getElementById('cardName').value = card.name;
+    document.getElementById('cardClosing').value = card.closing_day;
+    document.getElementById('cardDue').value = card.due_day;
+    openModal('modalCard');
+  }
+
+  async function deleteCard(id) {
+    if (!confirm('¿Eliminar esta tarjeta?')) return;
+    if (currentUser) {
+      await supabaseClient.from('credit_cards').delete().eq('id', id);
+      await loadFromSupabase();
+    } else {
+      state.cards = state.cards.filter(c => c.id !== id);
+      renderAll();
+    }
+  }
+
+  async function saveTransaction() {
+    const editId = document.getElementById('txEditId').value;
+    const type = document.getElementById('txType').value;
+    const amount = Number(document.getElementById('txAmount').value);
+    const description = document.getElementById('txDesc').value.trim();
+    const currency = document.getElementById('txCurrency').value;
+    const fx_rate = currency === 'USD' ? (Number(document.getElementById('txFxRate').value) || 1450) : null;
+    const payment_method = document.getElementById('txMethod').value;
+    const credit_card_id = document.getElementById('txCardId').value;
+    const installments_total = payment_method === 'credit_card' ? (Number(document.getElementById('txInstallments').value) || 1) : 1;
+    const transaction_date = document.getElementById('txDate').value;
+
+    if (!amount || !description) return;
+
+    const payload = {
+      type, amount, description, currency, fx_rate, payment_method,
+      credit_card_id: payment_method === 'credit_card' && credit_card_id ? credit_card_id : null,
+      installments_total, transaction_date
+    };
+
+    if (currentUser) {
+      if (editId) {
+        const { error } = await supabaseClient.from('transactions').update(payload).eq('id', editId);
+        if (error) return alert('Error al actualizar: ' + error.message);
+      } else {
+        const { error } = await supabaseClient.from('transactions').insert({ ...payload, user_id: currentUser.id });
+        if (error) return alert('Error al guardar: ' + error.message);
+      }
+      await loadFromSupabase();
+    } else {
+      if (editId) {
+        state.transactions = state.transactions.map(t => t.id === editId ? { ...t, ...payload } : t);
+      } else {
+        state.transactions.unshift({ id: 'tx_' + Date.now(), ...payload });
+      }
+      state.income = state.transactions.filter(t => t.type === 'income').reduce((a, b) => a + getTxEffectiveArs(b), 0);
+      renderAll();
+    }
+    closeModal('modalTx');
+  }
+
+  async function saveCommitment() {
+    const editId = document.getElementById('comEditId').value;
+    const commitment_type = document.getElementById('comType').value;
+    const title = document.getElementById('comTitle').value.trim();
+    const amount = Number(document.getElementById('comAmount').value);
+    const due_day = Number(document.getElementById('comDueDay').value);
+    const total_installments = commitment_type === 'loan_installment' ? (Number(document.getElementById('comTotalInst').value) || 12) : null;
+    const start_date = document.getElementById('comStartDate').value;
+
+    if (!title || !amount) return;
+
+    const payload = { commitment_type, title, amount, due_day, total_installments, start_date };
+
+    if (currentUser) {
+      if (editId) {
+        const { error } = await supabaseClient.from('commitments').update(payload).eq('id', editId);
+        if (error) return alert('Error al actualizar: ' + error.message);
+      } else {
+        const { error } = await supabaseClient.from('commitments').insert({ ...payload, user_id: currentUser.id });
+        if (error) return alert('Error al guardar: ' + error.message);
+      }
+      await loadFromSupabase();
+    } else {
+      if (editId) {
+        state.commitments = state.commitments.map(c => c.id === editId ? { ...c, ...payload } : c);
+      } else {
+        state.commitments.push({ id: 'com_' + Date.now(), ...payload, current_installment: 1, remaining_installments: (total_installments || 1) - 1 });
+      }
+      renderAll();
+    }
+    closeModal('modalCommitment');
+  }
+
+  async function saveCard() {
+    const editId = document.getElementById('cardEditId').value;
+    const name = document.getElementById('cardName').value.trim();
+    const closing_day = Number(document.getElementById('cardClosing').value);
+    const due_day = Number(document.getElementById('cardDue').value);
+    if (!name) return;
+
+    const payload = { name, closing_day, due_day };
+
+    if (currentUser) {
+      if (editId) {
+        const { error } = await supabaseClient.from('credit_cards').update(payload).eq('id', editId);
+        if (error) return alert('Error al actualizar: ' + error.message);
+      } else {
+        const { error } = await supabaseClient.from('credit_cards').insert({ ...payload, user_id: currentUser.id });
+        if (error) return alert('Error al guardar: ' + error.message);
+      }
+      await loadFromSupabase();
+    } else {
+      if (editId) {
+        state.cards = state.cards.map(c => c.id === editId ? { ...c, ...payload } : c);
+      } else {
+        state.cards.push({ id: 'card_' + Date.now(), ...payload });
+      }
+      renderAll();
+    }
+    closeModal('modalCard');
+  }
+
+  function openModal(id) { document.getElementById(id).classList.add('open'); }
+  function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+  function toggleTheme() {
+    const html = document.documentElement;
+    const next = html.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+    html.setAttribute('data-theme', next);
+    document.getElementById('themeBtn').textContent = next === 'light' ? '🌙' : '☀️';
+  }
+  function toggleFxField() {
+    document.getElementById('fxRateGroup').classList.toggle('hidden', document.getElementById('txCurrency').value !== 'USD');
+  }
+  function toggleCardFields() {
+    const isCard = document.getElementById('txMethod').value === 'credit_card';
+    document.getElementById('cardSelectGroup').classList.toggle('hidden', !isCard);
+    document.getElementById('txInstallmentsWrap').classList.toggle('hidden', !isCard);
+  }
+  function toggleLoanFields() {
+    document.getElementById('loanFieldsRow').classList.toggle('hidden', document.getElementById('comType').value !== 'loan_installment');
+  }
+
+  async function saveModulesConfig() {
+    state.limitPct = Number(document.getElementById('cfgLimitPct').value) || 30;
+    document.getElementById('moduleLoans').classList.toggle('hidden', !document.getElementById('modLoans').checked);
+    document.getElementById('moduleServices').classList.toggle('hidden', !document.getElementById('modServices').checked);
+    document.getElementById('moduleCards').classList.toggle('hidden', !document.getElementById('modCards').checked);
+
+    if (currentUser) {
+      await supabaseClient.from('user_profiles').update({ card_monthly_limit_pct: state.limitPct }).eq('id', currentUser.id);
+    }
+    renderAll();
+    closeModal('modalModules');
+  }
+
+  initApp();
+</script>
+</body>
+</html>
