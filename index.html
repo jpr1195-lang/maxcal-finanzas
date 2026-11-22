@@ -58,7 +58,6 @@
       overflow-x: hidden;
     }
 
-    /* Header */
     header {
       background: var(--surface);
       border-bottom: 1px solid var(--border);
@@ -102,7 +101,6 @@
 
     .container { max-width: 1340px; margin: 0 auto; padding: 1.25rem; }
 
-    /* Barra de Carga Rápida */
     .quick-bar {
       background: var(--surface);
       border: 1px solid var(--border);
@@ -119,7 +117,6 @@
     }
     .quick-bar input[type="text"]:focus { outline: none; }
 
-    /* KPIs */
     .kpi-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -145,7 +142,6 @@
     .badge.yellow { background: var(--yellow-bg); color: var(--yellow); }
     .badge.red { background: var(--red-bg); color: var(--red); }
 
-    /* Grilla Principal */
     .main-grid {
       display: grid;
       grid-template-columns: 1.6fr 1fr;
@@ -182,7 +178,6 @@
     }
     .progress-fill { height: 100%; background: var(--primary); border-radius: 999px; }
 
-    /* IA Box */
     .ai-box {
       display: flex; flex-direction: column;
       background: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
@@ -209,10 +204,9 @@
     input, select, textarea {
       width: 100%; padding: 0.6rem 0.75rem; border-radius: 8px;
       border: 1px solid var(--border); background: var(--surface); color: var(--text);
-      font-family: inherit; font-size: 16px; /* Evita zoom automático en móviles */
+      font-family: inherit; font-size: 16px;
     }
 
-    /* Modales */
     .modal-backdrop {
       position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55);
       display: none; place-items: center; z-index: 50; padding: 1rem;
@@ -228,18 +222,12 @@
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
     .hidden { display: none !important; }
 
-    /* Barra inferior móvil (oculta en escritorio) */
     .mobile-nav { display: none; }
 
-    /* =====================================================================
-       ADAPTACIÓN PARA CELULARES Y TABLETS (< 820px)
-       ===================================================================== */
     @media (max-width: 820px) {
-      body { padding-bottom: 74px; } /* Espacio para la barra inferior fija */
-
+      body { padding-bottom: 74px; }
       header { padding: 0.75rem 1rem; }
       .desktop-only { display: none !important; }
-
       .container { padding: 0.9rem; }
 
       .kpi-grid {
@@ -253,13 +241,10 @@
       .kpi-sub { font-size: 0.68rem; }
 
       .main-grid { grid-template-columns: 1fr; gap: 1rem; }
-
       .item-row { flex-wrap: wrap; }
       .item-right { width: 100%; justify-content: flex-end; padding-top: 0.25rem; }
-
       .form-row { grid-template-columns: 1fr; gap: 0; }
 
-      /* Modales estilo Bottom Sheet en celular */
       .modal-backdrop { padding: 0; align-items: end; }
       .modal {
         max-width: 100%;
@@ -268,7 +253,6 @@
         max-height: 92vh;
       }
 
-      /* Barra de navegación inferior fija al alcance del pulgar */
       .mobile-nav {
         position: fixed;
         bottom: 0; left: 0; right: 0;
@@ -313,14 +297,12 @@
 </header>
 
 <div class="container">
-  <!-- Carga Rápida -->
   <div class="quick-bar">
     <span style="font-size:1.1rem">⚡</span>
     <input type="text" id="quickInput" placeholder="Ej: 'Gasté 85000 en supermercado en 3 cuotas'" onkeydown="if(event.key==='Enter') parseQuickEntry()" />
     <button class="primary" onclick="parseQuickEntry()">Cargar</button>
   </div>
 
-  <!-- KPIs (2x2 en celular, 4x1 en escritorio) -->
   <div class="kpi-grid">
     <div class="card">
       <div class="kpi-label">Ingresos Mensuales</div>
@@ -412,7 +394,6 @@
   </div>
 </div>
 
-<!-- BARRA DE NAVEGACIÓN INFERIOR PARA CELULAR -->
 <nav class="mobile-nav">
   <button class="nav-primary" onclick="openNewTxModal()">
     <span class="nav-ico">➕</span>
@@ -432,29 +413,35 @@
   </button>
 </nav>
 
-<!-- MODAL: Login / Registro -->
+<!-- MODAL: Login / Registro Separado -->
 <div class="modal-backdrop" id="modalLogin">
   <div class="modal">
     <div class="section-header">
       <div class="section-title">Acceso a MAXCAL</div>
       <button onclick="closeModal('modalLogin')">✕</button>
     </div>
-    <div class="form-group">
-      <label>Nombre (opcional al crear cuenta)</label>
+
+    <div class="segmented" style="width:100%; margin-bottom:1rem; display:grid; grid-template-columns:1fr 1fr;">
+      <button id="tabLogin" class="active" onclick="switchAuthTab('login')">Iniciar Sesión</button>
+      <button id="tabSignup" onclick="switchAuthTab('signup')">Crear Cuenta</button>
+    </div>
+
+    <div class="form-group hidden" id="signupNameGroup">
+      <label>Tu nombre (solo al crear la cuenta)</label>
       <input type="text" id="loginName" placeholder="Ej: Juan Pablo" />
     </div>
+
     <div class="form-group">
       <label>Correo electrónico</label>
       <input type="email" id="loginEmail" placeholder="tu@correo.com" />
     </div>
+
     <div class="form-group">
       <label>Contraseña</label>
-      <input type="password" id="loginPassword" placeholder="Mínimo 6 caracteres" />
+      <input type="password" id="loginPassword" placeholder="Mínimo 6 caracteres" onkeydown="if(event.key==='Enter') submitAuthForm()" />
     </div>
-    <div style="display:flex; gap:0.6rem;">
-      <button class="primary" style="flex:1" onclick="loginWithEmail()">Iniciar Sesión</button>
-      <button style="flex:1" onclick="signUpWithEmail()">Crear Cuenta</button>
-    </div>
+
+    <button class="primary" style="width:100%" id="authSubmitBtn" onclick="submitAuthForm()">Iniciar Sesión</button>
   </div>
 </div>
 
@@ -656,6 +643,7 @@
   );
 
   let currentUser = null;
+  let authMode = 'login';
   let servicesViewMode = 'grouped';
   let chartInstance = null;
 
@@ -718,8 +706,29 @@
   }
 
   function handleAuthButton() {
-    if (currentUser) logoutUser();
-    else openModal('modalLogin');
+    if (currentUser) {
+      logoutUser();
+    } else {
+      switchAuthTab('login');
+      openModal('modalLogin');
+    }
+  }
+
+  function switchAuthTab(mode) {
+    authMode = mode;
+    const isSignup = mode === 'signup';
+    document.getElementById('tabLogin').classList.toggle('active', !isSignup);
+    document.getElementById('tabSignup').classList.toggle('active', isSignup);
+    document.getElementById('signupNameGroup').classList.toggle('hidden', !isSignup);
+    document.getElementById('authSubmitBtn').textContent = isSignup ? 'Crear Cuenta' : 'Iniciar Sesión';
+  }
+
+  async function submitAuthForm() {
+    if (authMode === 'signup') {
+      await signUpWithEmail();
+    } else {
+      await loginWithEmail();
+    }
   }
 
   async function loginWithEmail() {
@@ -729,7 +738,7 @@
 
     const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
     if (error) {
-      alert('Error al iniciar sesión: ' + error.message);
+      alert('No se pudo iniciar sesión. Revisá tu correo y contraseña o creá una cuenta.');
       return;
     }
     closeModal('modalLogin');
@@ -754,10 +763,18 @@
         data: { full_name: fullName || undefined }
       }
     });
+
     if (error) {
       alert('Error al crear cuenta: ' + error.message);
       return;
     }
+
+    if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      alert('Ese correo ya está registrado. Cambiá a "Iniciar Sesión" e ingresá con tu contraseña.');
+      switchAuthTab('login');
+      return;
+    }
+
     if (data.user && data.session) {
       if (fullName) {
         await supabaseClient.from('user_profiles').update({ display_name: fullName }).eq('id', data.user.id);
@@ -765,7 +782,7 @@
       closeModal('modalLogin');
       await applyAuthenticatedSession(data.user);
     } else {
-      alert('Cuenta creada. Revisá tu correo para confirmar o iniciá sesión.');
+      alert('Cuenta creada. Revisá tu correo para confirmar o desactivá "Confirm email" en Supabase para entrar directo.');
     }
   }
 
