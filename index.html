@@ -296,10 +296,18 @@
   <section class="balance-card">
     <div class="balance-top">
       <div>
-        <div class="eyebrow">Margen Libre Estimado del Mes</div>
+        <div class="eyebrow" id="heroPeriodEyebrow">Margen Libre Estimado del Mes</div>
         <div class="hero-amount" id="kpiFree" style="color: var(--ok)">$ 0</div>
       </div>
-      <div id="kpiSemaphore"></div>
+      <div style="display:flex; flex-direction:column; align-items:flex-end; gap:0.45rem;">
+        <div style="display:flex; align-items:center; gap:0.35rem; background:var(--surface-2); border:1px solid var(--border); padding:0.25rem 0.45rem; border-radius:12px;">
+          <button type="button" class="sm" onclick="shiftSelectedPeriod(-1)" title="Mes anterior">◀</button>
+          <input type="month" id="periodSelector" onchange="onPeriodSelectorChange()" style="border:none; background:transparent; padding:0.2rem 0.35rem; font-size:0.82rem; font-weight:700; width:auto;" />
+          <button type="button" class="sm" onclick="shiftSelectedPeriod(1)" title="Mes siguiente">▶</button>
+          <button type="button" class="sm primary" onclick="resetSelectedPeriod()">Hoy</button>
+        </div>
+        <div id="kpiSemaphore"></div>
+      </div>
     </div>
 
     <div class="mini-stats">
@@ -785,6 +793,42 @@
   let monthlySeriesCache = [];
   let aiTurn = 0;
 
+  function getCurrentMonthKey() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  let selectedMonthKey = getCurrentMonthKey();
+
+  function getSelectedMonthDate() {
+    const [y, m] = selectedMonthKey.split('-').map(Number);
+    return new Date(y, (m || 1) - 1, 1);
+  }
+
+  function shiftSelectedPeriod(delta) {
+    const d = getSelectedMonthDate();
+    d.setMonth(d.getMonth() + delta);
+    selectedMonthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const inp = document.getElementById('periodSelector');
+    if (inp) inp.value = selectedMonthKey;
+    renderAll();
+  }
+
+  function resetSelectedPeriod() {
+    selectedMonthKey = getCurrentMonthKey();
+    const inp = document.getElementById('periodSelector');
+    if (inp) inp.value = selectedMonthKey;
+    renderAll();
+  }
+
+  function onPeriodSelectorChange() {
+    const val = document.getElementById('periodSelector')?.value;
+    if (val) {
+      selectedMonthKey = val;
+      renderAll();
+    }
+  }
+
   let state = {
     income: 0,
     limitPct: 30,
@@ -801,6 +845,8 @@
     try {
       applyLogoAsset();
       toggleClosingRuleInputs();
+      const pSel = document.getElementById('periodSelector');
+      if (pSel) pSel.value = selectedMonthKey;
       document.getElementById('txDate').valueAsDate = new Date();
       document.getElementById('comStartDate').valueAsDate = new Date();
 
@@ -1033,11 +1079,21 @@
     document.getElementById('simCardId').innerHTML = opts;
   }
 
+  function getEffectiveIncomeForMonth(monthKey) {
+    const monthIncomes = state.transactions.filter(t => t.type === 'income' && (t.transaction_date || '').startsWith(monthKey));
+    if (monthIncomes.length > 0) {
+      return monthIncomes.reduce((acc, t) => acc + getTxEffectiveArs(t), 0);
+    }
+    // If no income was explicitly logged in a future/past month, use latest known monthly income as baseline
+    return state.income;
+  }
+
   function renderIncomes() {
-    const incomes = state.transactions.filter(t => t.type === 'income');
+    const monthIncomes = state.transactions.filter(t => t.type === 'income' && (t.transaction_date || '').startsWith(selectedMonthKey));
+    const incomes = monthIncomes.length > 0 ? monthIncomes : state.transactions.filter(t => t.type === 'income');
     const el = document.getElementById('incomesList');
     if (!incomes.length) {
-      el.innerHTML = `<div class="row-sub">Sin ingresos cargados. Usá <strong>+ Ingreso</strong> para agregarlos y verificarlos acá.</div>`;
+      el.innerHTML = `<div class="row-sub">Sin ingresos cargados para este período. Usá <strong>+ Ingreso</strong> para agregarlos.</div>`;
       return;
     }
     el.innerHTML = incomes.map(inc => `
@@ -1080,26 +1136,39 @@
   }
 
   function renderKPIs() {
+    const targetDate = getSelectedMonthDate();
     const now = new Date();
-    const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const monthPrefix = selectedMonthKey;
+    const monthsDiffFromNow = (targetDate.getFullYear() - now.getFullYear()) * 12 + (targetDate.getMonth() - now.getMonth());
+    const periodLabel = targetDate.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
 
-    const totalCommitments = state.commitments.reduce((acc, c) => acc + Number(c.amount), 0);
+    const eyebrowEl = document.getElementById('heroPeriodEyebrow');
+    if (eyebrowEl) {
+      eyebrowEl.textContent = monthsDiffFromNow === 0
+        ? `Margen Libre Estimado (${periodLabel})`
+        : monthsDiffFromNow < 0
+          ? `Balance Histórico (${periodLabel})`
+          : `Proyección Estimada (${periodLabel})`;
+    }
+
+    const totalCommitments = getCommitmentsForMonthOffset(monthsDiffFromNow);
     const monthDirectExpenses = state.transactions
       .filter(t => t.type === 'expense' && t.payment_method !== 'credit_card' && (t.transaction_date || '').startsWith(monthPrefix))
       .reduce((acc, t) => acc + getTxEffectiveArs(t), 0);
 
     const totalFixedAndDirect = totalCommitments + monthDirectExpenses;
 
-    const totalCardsArs = getCardMonthlyTotalsForDate(now);
-    const nextMonthDate = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const totalCardsArs = getCardMonthlyTotalsForDate(targetDate);
+    const nextMonthDate = new Date(targetDate.getFullYear(), targetDate.getMonth() + 1, 1);
     const nextMonthCardsArs = getCardMonthlyTotalsForDate(nextMonthDate);
 
+    const periodIncome = getEffectiveIncomeForMonth(monthPrefix);
     const usdList = state.transactions.filter(t => t.type === 'expense' && t.currency === 'USD');
     const totalUsd = usdList.reduce((acc, t) => acc + Number(t.amount), 0);
-    const freeCash = state.income - totalFixedAndDirect - totalCardsArs;
-    const ratio = state.income > 0 ? (totalCardsArs / state.income) * 100 : 0;
+    const freeCash = periodIncome - totalFixedAndDirect - totalCardsArs;
+    const ratio = periodIncome > 0 ? (totalCardsArs / periodIncome) * 100 : 0;
 
-    document.getElementById('kpiIncome').textContent = fmtArs(state.income);
+    document.getElementById('kpiIncome').textContent = fmtArs(periodIncome);
     document.getElementById('kpiCommitments').textContent = fmtArs(totalFixedAndDirect);
     const subComEl = document.querySelector('#kpiCommitments + .s');
     if (subComEl) {
@@ -1117,7 +1186,7 @@
     document.getElementById('kpiFree').style.color = freeCash >= 0 ? 'var(--ok)' : 'var(--bad)';
 
     let badge = `<span class="pill ok">● Saludable (${ratio.toFixed(0)}%)</span>`;
-    if (state.income === 0 && totalCardsArs === 0 && totalFixedAndDirect === 0) badge = `<span class="pill warn">● Sin datos</span>`;
+    if (periodIncome === 0 && totalCardsArs === 0 && totalFixedAndDirect === 0) badge = `<span class="pill warn">● Sin datos</span>`;
     else if (ratio > state.limitPct + 10) badge = `<span class="pill bad">● Ajustado (${ratio.toFixed(0)}%)</span>`;
     else if (ratio > state.limitPct) badge = `<span class="pill warn">● Atención (${ratio.toFixed(0)}%)</span>`;
     document.getElementById('kpiSemaphore').innerHTML = badge;
@@ -1225,6 +1294,10 @@
         `).join('')
       : `<span class="row-sub">Agregá tus tarjetas o MercadoPago.</span>`;
 
+    const targetDate = getSelectedMonthDate();
+    const tYear = targetDate.getFullYear();
+    const tMonth = targetDate.getMonth();
+
     const cardTx = state.transactions.filter(t => t.payment_method === 'credit_card');
     if (!cardTx.length) {
       list.innerHTML = `<div class="row-sub">Sin compras en cuotas cargadas.</div>`;
@@ -1234,12 +1307,22 @@
     list.innerHTML = cardTx.map(t => {
       const card = state.cards.find(c => c.id === t.credit_card_id);
       const isUsd = t.currency === 'USD';
-      const q = isUsd ? fmtUsd(Number(t.amount) / (t.installments_total || 1)) : fmtArs(getTxEffectiveArs(t) / (t.installments_total || 1));
+      const totalQ = Number(t.installments_total) || 1;
+      const rawStart = t.first_billing_month || t.transaction_date || `${tYear}-${String(tMonth + 1).padStart(2, '0')}-01`;
+      const parts = rawStart.slice(0, 10).split('-').map(Number);
+      const diff = (tYear - parts[0]) * 12 + (tMonth - ((parts[1] || 1) - 1));
+      const isActiveInPeriod = diff >= 0 && diff < totalQ;
+      const quotaBadge = isActiveInPeriod
+        ? `<span class="pill ok">Cuota ${diff + 1}/${totalQ}</span>`
+        : diff < 0
+          ? `<span class="pill warn">Arranca ${rawStart.slice(0, 7)}</span>`
+          : `<span class="pill">Finalizada</span>`;
+      const q = isUsd ? fmtUsd(Number(t.amount) / totalQ) : fmtArs(getTxEffectiveArs(t) / totalQ);
       return `
-        <div class="row-item">
+        <div class="row-item" style="opacity:${isActiveInPeriod ? '1' : '0.62'};">
           <div class="row-main">
-            <div class="row-name">${t.description} ${isUsd ? '<span class="pill warn">USD</span>' : ''}</div>
-            <div class="row-sub">${card ? card.name : 'Tarjeta'} • ${t.installments_total || 1} cuotas (${q}/mes)</div>
+            <div class="row-name">${t.description} ${quotaBadge} ${isUsd ? '<span class="pill warn">USD</span>' : ''}</div>
+            <div class="row-sub">${card ? card.name : 'Tarjeta'} • ${totalQ} cuotas (${q}/mes)</div>
           </div>
           <div class="row-actions">
             <span style="font-weight:700;">${isUsd ? fmtUsd(t.amount) : fmtArs(t.amount)}</span>
@@ -1257,7 +1340,8 @@
         const curr = Number(c.current_installment) || 1;
         const tot = Number(c.total_installments) || 1;
         const rem = c.remaining_installments != null ? Number(c.remaining_installments) : Math.max(0, tot - curr);
-        if (monthOffset > rem) return acc; // Loan finished before this future month!
+        if (monthOffset > rem) return acc;
+        if (monthOffset < -(curr - 1)) return acc;
       }
       return acc + Number(c.amount || 0);
     }, 0);
